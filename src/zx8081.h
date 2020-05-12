@@ -178,6 +178,7 @@ extern int color_es_chroma(void);
 extern z80_byte zx8081_last_port_write_value;
 
 extern z80_byte ascii_to_zx81(z80_byte c);
+extern z80_byte ascii_to_zx80(z80_byte c);
 extern z80_int zx8081_get_standard_ram(void);
 
 #endif

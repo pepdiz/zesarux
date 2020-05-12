@@ -63,9 +63,11 @@
 #include "diviface.h"
 #include "snap_rzx.h"
 #include "divmmc.h"
+#include "divide.h"
 #include "zxevo.h"
 #include "tsconf.h"
 #include "baseconf.h"
+#include "tbblue.h"
 
 
 #include "autoselectoptions.h"
@@ -90,6 +92,16 @@
 #define ZSF_ZXEVO_NVRAM 13
 #define ZSF_TSCONF_RAMBLOCK 14
 #define ZSF_TSCONF_CONF 15
+#define ZSF_DIVIFACE_CONF 16
+#define ZSF_DIVIFACE_MEM 17
+#define ZSF_CPC_RAMBLOCK 18
+#define ZSF_CPC_CONF 19
+#define ZSF_PENTAGON_CONF 20
+#define ZSF_TBBLUE_RAMBLOCK 21
+#define ZSF_TBBLUE_CONF 22
+#define ZSF_TBBLUE_PALETTES 23
+#define ZSF_TBBLUE_SPRITES 24
+#define ZSF_TIMEX 25
 
 
 int zsf_force_uncompressed=0; //Si forzar bloques no comprimidos
@@ -160,6 +172,7 @@ Byte fields:
 -Block ID 8: ZSF_ULA
 Byte fields:
 0: Border color (Last out to port 254 AND 7)
+
 
 
 -Block ID 9: ZSF_ULAPLUS
@@ -235,11 +248,124 @@ Byte fields:
 0:255: tsconf_af_ports[256];
 256-1279: tsconf_fmaps
 
+-Block ID 16: ZSF_DIVIFACE_CONF
+Divmmc/divide common settings (diviface), in case it's enabled
+Byte fields:
+
+0: Memory size: Value of 2=32 kb, 3=64 kb, 4=128 kb, 5=256 kb, 6=512 kb
+1: Diviface control register
+2: Status bits: 
+  Bit 0=If entered automatic divmmc paging. 
+  Bit 1=If divmmc interface is enabled
+  Bit 2=If divmmc ports are enabled
+  Bit 3=If divide interface is enabled
+  Bit 4=If divide ports are enabled  
+  Bits 5-7: unused by now
+
+-Block ID 17: ZSF_DIVIFACE_MEM
+A ram binary block for diviface memory
+Byte Fields:
+0: Flags. Currently: bit 0: if compressed with repetition block DD DD YY ZZ, where
+    YY is the byte to repeat and ZZ the number of repetitions (0 means 256)
+1: ram block id 
+2 and next bytes: data bytes
+
+
+-Block ID 18: ZSF_CPC_RAMBLOCK
+A ram binary block for a cpc
+Byte Fields:
+0: Flags. Currently: bit 0: if compressed with repetition block DD DD YY ZZ, where
+    YY is the byte to repeat and ZZ the number of repetitions (0 means 256)
+1,2: Block start address (currently unused)
+3,4: Block lenght
+5: ram block id 
+6 and next bytes: data bytes
+
+
+-Block ID 19: ZSF_CPC_CONF
+Ports and internal registers of CPC machine
+Byte fields:
+0-3: Gate registers
+4-19: Palette
+20-23: PPI ports
+24-55: CRTC registers
+56: Border color
+57: last crtc selected register
+
+-Block ID 20: ZSF_PENTAGON_CONF
+Ports and internal registers of Pentagon machine
+Byte fields:
+0: Port EFF7
+
+
+-Block ID 21: ZSF_TBBLUE_RAMBLOCK
+A ram binary block for a tbblue. We store all the 2048 MB (memoria_spectrum pointer). Total pages: 128
+Byte Fields:
+0: Flags. Currently: bit 0: if compressed with repetition block DD DD YY ZZ, where
+    YY is the byte to repeat and ZZ the number of repetitions (0 means 256)
+1,2: Block start address (currently unused)
+3,4: Block lenght
+5: ram block id (in blocks of 16kb)
+6 and next bytes: data bytes
+
+
+
+-Block ID 22: ZSF_TBBLUE_CONF
+0: tbblue_last_register
+1-256: 256 internal TBBLUE registers
+257: tbblue_bootrom_flag
+258: tbblue_port_123b
+259: Same 3 bytes as ZSF_DIVIFACE_CONF:
+
+  0: Memory size: Value of 2=32 kb, 3=64 kb, 4=128 kb, 5=256 kb, 6=512 kb
+  1: Diviface control register
+  2: Status bits:
+    Bit 0=If entered automatic divmmc paging.
+    Bit 1=If divmmc interface is enabled
+    Bit 2=If divmmc ports are enabled
+    Bit 3=If divide interface is enabled
+    Bit 4=If divide ports are enabled
+    Bits 5-7: unused by now
+
+262: Word: Copper PC
+264: Byte: Copper memory (currently 2048 bytes)
+2312:
+....
+
+
+-Block ID 23 ZSF_TBBLUE_PALETTES
+Colour palettes of TBBLUE machine
+Byte fields:
+0   -511 z80_int tbblue_palette_ula_first[256];
+512 -1023 z80_int tbblue_palette_ula_second[256];
+1024-1535 z80_int tbblue_palette_layer2_first[256];
+1536-2047 z80_int tbblue_palette_layer2_second[256];
+2048-2559 z80_int tbblue_palette_sprite_first[256];
+2560-3071 z80_int tbblue_palette_sprite_second[256];
+3072-3583 z80_int tbblue_palette_tilemap_first[256];
+3584-4095 z80_int tbblue_palette_tilemap_second[256];
+
+
+-Block ID 24: ZSF_TBBLUE_SPRITES
+0: 16KB with the sprite patterns
+16384: z80_byte tbsprite_sprites[TBBLUE_MAX_SPRITES][TBBLUE_SPRITE_ATTRIBUTE_SIZE];
+
+
+
+-Block ID 25: ZSF_TIMEX
+Byte fields:
+0: timex_port_f4
+1: timex_port_ff
+
+
+
 
 
 -Como codificar bloques de memoria para Spectrum 128k, zxuno, tbblue, tsconf, etc?
 Con un numero de bloque (0...255) pero... que tamaño de bloque? tbblue usa paginas de 8kb, tsconf usa paginas de 16kb
 Quizá numero de bloque y parametro que diga tamaño, para tener un block id comun para todos ellos
+->NOTA: esto parece que no lo he tenido en cuenta pues ya estoy usando bloques diferentes para tsconf, zxuno, tbblue etc
+Por otra parte, tener bloques diferentes ayuda a saber mejor qué tipos de bloques son en el snapshot
 
 */
 
@@ -247,7 +373,7 @@ Quizá numero de bloque y parametro que diga tamaño, para tener un block id com
 #define MAX_ZSF_BLOCK_ID_NAMELENGTH 30
 
 //Total de nombres sin contar el unknown final
-#define MAX_ZSF_BLOCK_ID_NAMES 16
+#define MAX_ZSF_BLOCK_ID_NAMES 26
 char *zsf_block_id_names[]={
  //123456789012345678901234567890
   "ZSF_NOOP",
@@ -266,6 +392,16 @@ char *zsf_block_id_names[]={
   "ZSF_ZXEVO_NVRAM",
   "ZSF_TSCONF_RAMBLOCK",
   "ZSF_TSCONF_CONF",
+  "ZSF_DIVIFACE_CONF",
+  "ZSF_DIVIFACE_MEM",
+  "ZSF_CPC_RAMBLOCK",
+  "ZSF_CPC_CONF",
+  "ZSF_PENTAGON_CONF",
+  "ZSF_TBBLUE_RAMBLOCK",
+  "ZSF_TBBLUE_CONF",
+  "ZSF_TBBLUE_PALETTES",
+  "ZSF_TBBLUE_SPRITES",
+  "ZSF_TIMEX",
 
   "Unknown"  //Este siempre al final
 };
@@ -279,7 +415,10 @@ char *zsf_get_block_id_name(int block_id)
   else return zsf_block_id_names[block_id];
 }
 
-int zsf_write_block(FILE *ptr_zsf_file, z80_byte *source,z80_int block_id, unsigned int lenght)
+//Si ptr_zsf_file no es NULL, lo guarda en archivo
+//Si ptr_zsf_file es NULL, lo guarda en destination_memory
+//El **destination_memory es el puntero al puntero donde esta la memoria destino, se modificara al salir con el siguiente byte del final
+int zsf_write_block(FILE *ptr_zsf_file, z80_byte **destination_memory, int *longitud_total, z80_byte *source,z80_int block_id, unsigned int lenght)
 {
   z80_byte block_header[6];
   block_header[0]=value_16_to_8l(block_id);
@@ -290,11 +429,37 @@ int zsf_write_block(FILE *ptr_zsf_file, z80_byte *source,z80_int block_id, unsig
   block_header[4]=(lenght>>16)  & 0xFF;
   block_header[5]=(lenght>>24)  & 0xFF;
 
+  z80_byte *puntero_memoria;
+  puntero_memoria=*destination_memory;
+
   //Write header
-  fwrite(block_header, 1, 6, ptr_zsf_file);
+  if (ptr_zsf_file!=NULL) {
+    fwrite(block_header, 1, 6, ptr_zsf_file);
+  }
+  else {
+    memcpy(puntero_memoria,block_header,6);
+    puntero_memoria +=6;
+  }
+
+  *longitud_total +=6;
+
+
 
   //Write data block
-  if (lenght) fwrite(source, 1, lenght, ptr_zsf_file);
+  if (lenght) {
+    if (ptr_zsf_file!=NULL) {
+      fwrite(source, 1, lenght, ptr_zsf_file);
+    }
+    else {
+      memcpy(puntero_memoria,source,lenght);
+      puntero_memoria +=lenght;      
+    }
+  }
+
+  *longitud_total +=lenght;
+
+  //Modificar puntero
+  if (ptr_zsf_file==NULL) *destination_memory=puntero_memoria;
 
   return 0;
 
@@ -435,8 +600,8 @@ void load_zsf_snapshot_block_data(z80_byte *block_data,int longitud_original)
 
   if (block_lenght==0) block_lenght=65536;
 
-  debug_printf (VERBOSE_DEBUG,"Block start: %d Lenght: %d Compressed: %s Length_source: %d",block_start,block_lenght,(block_flags&1 ? "Yes" : "No"),longitud_original);
-  //printf ("Block start: %d Lenght: %d Compressed: %d Length_source: %d\n",block_start,block_lenght,block_flags&1,longitud_original);
+  debug_printf (VERBOSE_DEBUG,"Block start: %d Length: %d Compressed: %s Length_source: %d",block_start,block_lenght,(block_flags&1 ? "Yes" : "No"),longitud_original);
+  //printf ("Block start: %d Length: %d Compressed: %d Length_source: %d\n",block_start,block_lenght,block_flags&1,longitud_original);
 
 
   longitud_original -=5;
@@ -466,7 +631,7 @@ void load_zsf_spec128_snapshot_block_data(z80_byte *block_data,int longitud_orig
   z80_byte ram_page=block_data[i];
   i++;
 
-  debug_printf (VERBOSE_DEBUG,"Block ram_page: %d start: %d Lenght: %d Compressed: %s Length_source: %d",ram_page,block_start,block_lenght,(block_flags&1 ? "Yes" : "No"),longitud_original);
+  debug_printf (VERBOSE_DEBUG,"Block ram_page: %d start: %d Length: %d Compressed: %s Length_source: %d",ram_page,block_start,block_lenght,(block_flags&1 ? "Yes" : "No"),longitud_original);
 
 
   longitud_original -=6;
@@ -495,7 +660,7 @@ void load_zsf_zxuno_snapshot_block_data(z80_byte *block_data,int longitud_origin
   z80_byte ram_page=block_data[i];
   i++;
 
-  debug_printf (VERBOSE_DEBUG,"Block ram_page: %d start: %d Lenght: %d Compressed: %s Length_source: %d",ram_page,block_start,block_lenght,(block_flags&1 ? "Yes" : "No"),longitud_original);
+  debug_printf (VERBOSE_DEBUG,"Block ram_page: %d start: %d Length: %d Compressed: %s Length_source: %d",ram_page,block_start,block_lenght,(block_flags&1 ? "Yes" : "No"),longitud_original);
 
 
   longitud_original -=6;
@@ -504,6 +669,105 @@ void load_zsf_zxuno_snapshot_block_data(z80_byte *block_data,int longitud_origin
   load_zsf_snapshot_block_data_addr(&block_data[i],zxuno_sram_mem_table_new[ram_page],block_lenght,longitud_original,block_flags&1);
 
 }
+
+
+void load_zsf_tbblue_snapshot_block_data(z80_byte *block_data,int longitud_original)
+{
+
+
+
+  int i=0;
+  z80_byte block_flags=block_data[i];
+
+  //longitud_original : tamanyo que ocupa todo el bloque con la cabecera de 5 bytes
+
+  i++;
+  z80_int block_start=value_8_to_16(block_data[i+1],block_data[i]);
+  i +=2;
+  z80_int block_lenght=value_8_to_16(block_data[i+1],block_data[i]);
+  i+=2;
+
+  z80_byte ram_page=block_data[i];
+  i++;
+
+  debug_printf (VERBOSE_DEBUG,"Block ram_page: %d start: %d Length: %d Compressed: %s Length_source: %d",ram_page,block_start,block_lenght,(block_flags&1 ? "Yes" : "No"),longitud_original);
+
+
+  longitud_original -=6;
+
+  int offset_memoria=16384*ram_page;
+
+
+  load_zsf_snapshot_block_data_addr(&block_data[i],&memoria_spectrum[offset_memoria],block_lenght,longitud_original,block_flags&1);
+
+
+  //Y ajustar memoria total
+  //Esto se hace estableciendo el numero de bloques segun la direccion donde se carga el ultimo bloque
+  //Dado que se cargan los bloques ordenados, al final se tendrá el valor mas alto siempre para la memoria total
+  //Si se cargasen en otro orden, esto fallaria
+  tbblue_set_ram_blocks(offset_memoria/1024);
+
+}
+
+void load_zsf_cpc_snapshot_block_data(z80_byte *block_data,int longitud_original)
+{
+
+
+
+  int i=0;
+  z80_byte block_flags=block_data[i];
+
+  //longitud_original : tamanyo que ocupa todo el bloque con la cabecera de 5 bytes
+
+  i++;
+  z80_int block_start=value_8_to_16(block_data[i+1],block_data[i]);
+  i +=2;
+  z80_int block_lenght=value_8_to_16(block_data[i+1],block_data[i]);
+  i+=2;
+
+  z80_byte ram_page=block_data[i];
+  i++;
+
+  debug_printf (VERBOSE_DEBUG,"Block ram_page: %d start: %d Length: %d Compressed: %s Length_source: %d",ram_page,block_start,block_lenght,(block_flags&1 ? "Yes" : "No"),longitud_original);
+
+
+  longitud_original -=6;
+
+
+  load_zsf_snapshot_block_data_addr(&block_data[i],cpc_ram_mem_table[ram_page],block_lenght,longitud_original,block_flags&1);
+
+}
+
+
+void load_zsf_diviface_snapshot_block_data(z80_byte *block_data,int longitud_original)
+{
+
+
+
+  int i=0;
+  z80_byte block_flags=block_data[i];
+
+
+  i++;
+
+  z80_byte ram_page=block_data[i];
+  i++;
+
+  z80_int block_lenght=16384;
+
+  debug_printf (VERBOSE_DEBUG,"Block diviface ram_page: %d Length: %d Compressed: %s Length_source: %d",ram_page,block_lenght,(block_flags&1 ? "Yes" : "No"),longitud_original);
+
+
+  longitud_original -=3;
+
+    z80_byte *puntero_origen;
+    puntero_origen=&diviface_memory_pointer[16384*ram_page];
+
+
+  load_zsf_snapshot_block_data_addr(&block_data[i],puntero_origen,block_lenght,longitud_original,block_flags&1);
+
+}
+
 
 void load_zsf_tsconf_snapshot_block_data(z80_byte *block_data,int longitud_original)
 {
@@ -524,7 +788,7 @@ void load_zsf_tsconf_snapshot_block_data(z80_byte *block_data,int longitud_origi
   z80_byte ram_page=block_data[i];
   i++;
 
-  debug_printf (VERBOSE_DEBUG,"Block ram_page: %d start: %d Lenght: %d Compressed: %s Length_source: %d",ram_page,block_start,block_lenght,(block_flags&1 ? "Yes" : "No"),longitud_original);
+  debug_printf (VERBOSE_DEBUG,"Block ram_page: %d start: %d Length: %d Compressed: %s Length_source: %d",ram_page,block_start,block_lenght,(block_flags&1 ? "Yes" : "No"),longitud_original);
 
 
   longitud_original -=6;
@@ -588,7 +852,16 @@ void load_zsf_ula(z80_byte *header)
 
   //printf ("border: %d\n",out_254);
   modificado_border.v=1;
+
 }
+
+
+void load_zsf_timex(z80_byte *header)
+{
+  timex_port_f4=header[0];
+  timex_port_ff=header[1];
+}
+
 
 
 void load_zsf_ulaplus(z80_byte *header)
@@ -619,6 +892,67 @@ Byte fields:
         int i;
         for (i=0;i<64;i++) ulaplus_palette_table[i]=header[3+i];
 }
+
+
+//NOTA: esta funcion se usa tanto en bloque ZSF_DIVIFACE_CONF como cargado desde dentro de ZSF_TBBLUE_CONF
+void load_zsf_diviface_conf(z80_byte *header)
+{
+/*
+Block ID 16: ZSF_DIVIFACE_CONF
+Divmmc/divide common settings (diviface), in case it's enabled
+Byte fields:
+
+0: Memory size: Value of 2=32 kb, 3=64 kb, 4=128 kb, 5=256 kb, 6=512 kb
+1: Diviface control register
+2: Status bits: 
+  Bit 0=If entered automatic divmmc paging. 
+  Bit 1=If divmmc interface is enabled
+  Bit 2=If divmmc ports are enabled
+  Bit 3=If divide interface is enabled
+  Bit 4=If divide ports are enabled  
+  Bits 5-7: unused by now
+*/
+
+  //Resetear settings divide/divmmc. Ya los habilitara luego si conviene
+  divmmc_diviface_enabled.v=0;
+  divide_diviface_enabled.v=0;
+  diviface_enabled.v=0;
+
+  diviface_current_ram_memory_bits=header[0];
+
+  //Activar dispositivos segun bits
+  //Si divmmc
+  if (header[2] & 2) {
+    divmmc_diviface_enable();
+  }
+
+  //O divide
+  if (header[2] & 8) {
+    divide_diviface_disable();
+  }
+
+  //Y settings de puertos
+  if (header[2] & 4) {
+    divmmc_mmc_ports_enable();
+  }
+  else {
+    divmmc_mmc_ports_disable();
+  }
+
+
+  if (header[2] & 16) {
+    divide_ide_ports_enable();
+  }
+  else {
+    divide_ide_ports_disable();
+  }
+
+  //Control register al final, y tambien el automatic paging
+  diviface_control_register=header[1];
+  diviface_paginacion_automatica_activa.v=header[2]&1;
+
+}
+
 
 void load_zsf_zx8081_conf(z80_byte *header)
 {
@@ -655,12 +989,24 @@ void load_zsf_zxevo_nvram(z80_byte *header)
   int i;
 
   //Control de acceso a celdas nvram
-  zxevo_last_port_eff7=header[0];
+  puerto_eff7=header[0];
 
   //celda nvram seleccionada
   zxevo_last_port_dff7=header[1];
 
   for (i=0;i<256;i++) zxevo_nvram[i]=header[i+2];
+
+}
+
+void load_zsf_pentagon_conf(z80_byte *header)
+{
+
+  
+
+  //Puerto pentagon interno
+  puerto_eff7=header[0];
+
+
 
 }
 
@@ -697,9 +1043,7 @@ Byte fields:
 
   zxuno_set_memory_pages();    
 
-  //Resetear settings mmc. Ya los habilitara luego si conviene
-  divmmc_diviface_enabled.v=0;
-  diviface_enabled.v=0;
+
 
 
   //Sincronizar settings de emulador con los valores de puertos de zxuno
@@ -709,6 +1053,177 @@ Byte fields:
 
   ulaplus_set_extended_mode(zxuno_ports[0x40]);
 }
+
+
+
+void load_zsf_tbblue_conf(z80_byte *header)
+{
+/*
+-Block ID 22: ZSF_TBBLUE_CONF
+0: tbblue_last_register
+1-256: 256 internal TBBLUE registers
+257: tbblue_bootrom_flag
+258: tbblue_port_123b
+259: Same 3 bytes as ZSF_DIVIFACE_CONF:
+
+  0: Memory size: Value of 2=32 kb, 3=64 kb, 4=128 kb, 5=256 kb, 6=512 kb
+  1: Diviface control register
+  2: Status bits:
+    Bit 0=If entered automatic divmmc paging.
+    Bit 1=If divmmc interface is enabled
+    Bit 2=If divmmc ports are enabled
+    Bit 3=If divide interface is enabled
+    Bit 4=If divide ports are enabled
+    Bits 5-7: unused by now
+
+262: Word: Copper PC
+264: Byte: Copper memory (currently 2048 bytes)
+2312:
+....
+*/
+
+  tbblue_last_register=header[0];
+  int i;
+  for (i=0;i<256;i++) tbblue_registers[i]=header[1+i];
+
+   tbblue_bootrom.v=header[257];
+  tbblue_port_123b=header[258];
+ 
+  load_zsf_diviface_conf(&header[259]);
+
+  tbblue_copper_pc=value_8_to_16(header[263],header[262]);
+  for (i=0;i<2048;i++) {
+    tbblue_copper_memory[i]=header[264+i];
+  }
+  
+
+
+
+  
+ 
+  //Final settings
+  tbblue_set_emulator_setting_timing();
+
+   tbblue_set_emulator_setting_reg_8();
+
+
+  tbblue_set_memory_pages();   
+
+  //turbo despues de tbblue_set_emulator_setting_timing pues cambia timing
+  tbblue_set_emulator_setting_turbo();
+
+
+  tbblue_set_emulator_setting_divmmc();
+
+}
+
+
+
+void load_zsf_tbblue_sprites(z80_byte *header)
+{
+/*
+-Block ID 24: ZSF_TBBLUE_SPRITES
+0: 16KB with the sprite patterns
+16384: z80_byte tbsprite_sprites[TBBLUE_MAX_SPRITES][TBBLUE_SPRITE_ATTRIBUTE_SIZE];
+*/
+
+
+  //Patterns de sprites
+  //z80_byte tbsprite_new_patterns[TBBLUE_SPRITE_ARRAY_PATTERN_SIZE];
+
+  int i;
+
+  for (i=0;i<TBBLUE_SPRITE_ARRAY_PATTERN_SIZE;i++) {
+    tbsprite_new_patterns[i]=header[i];
+  }
+
+  int spr,attr;
+  int indice=16384;
+  for (spr=0;spr<TBBLUE_MAX_SPRITES;spr++) {
+    for (attr=0;attr<TBBLUE_SPRITE_ATTRIBUTE_SIZE;attr++) {
+      tbsprite_sprites[spr][attr]=header[indice];
+
+      indice++;
+    }
+  }
+
+
+}
+
+
+
+void load_zsf_tbblue_palettes(z80_byte *header)
+{
+/*
+-Block ID 23 ZSF_TBBLUE_PALETTES
+Colour palettes of TBBLUE machine
+Byte fields:
+0   -511 z80_int tbblue_palette_ula_first[256];
+512 -1023 z80_int tbblue_palette_ula_second[256];
+1024-1535 z80_int tbblue_palette_layer2_first[256];
+1536-2047 z80_int tbblue_palette_layer2_second[256];
+2048-2559 z80_int tbblue_palette_sprite_first[256];
+2560-3071 z80_int tbblue_palette_sprite_second[256];
+3072-3583 z80_int tbblue_palette_tilemap_first[256];
+3584-4095 z80_int tbblue_palette_tilemap_second[256];
+*/
+
+  int i;
+
+  for (i=0;i<256;i++) {
+
+    int offs=i*2;
+
+    tbblue_palette_ula_first[i]=util_get_value_little_endian(&header[offs]);
+    tbblue_palette_ula_second[i]=util_get_value_little_endian(&header[512+offs]);
+
+    tbblue_palette_layer2_first[i]=util_get_value_little_endian(&header[1024+offs]);
+    tbblue_palette_layer2_second[i]=util_get_value_little_endian(&header[1536+offs]);    
+
+    tbblue_palette_sprite_first[i]=util_get_value_little_endian(&header[2048+offs]);
+    tbblue_palette_sprite_second[i]=util_get_value_little_endian(&header[2560+offs]);    
+
+    tbblue_palette_tilemap_first[i]=util_get_value_little_endian(&header[3072+offs]);
+    tbblue_palette_tilemap_second[i]=util_get_value_little_endian(&header[3584+offs]);      
+          
+  }
+
+  
+
+}
+
+
+void load_zsf_cpc_conf(z80_byte *header)
+{
+/*
+-Block ID 19: ZSF_CPC_CONF
+Ports and internal registers of CPC machine
+Byte fields:
+
+0-3: Gate registers
+4-19: Palette
+20-23: PPI ports
+24-55: CRTC registers
+56: Border color
+57: last crtc selected register
+
+
+  */
+
+  int i;
+
+  for (i=0;i<4;i++)   cpc_gate_registers[i]=header[i];
+  for (i=0;i<16;i++)  cpc_palette_table[i]=header[4+i];
+  for (i=0;i<4;i++)   cpc_ppi_ports[i]=header[20+i];
+  for (i=0;i<32;i++)  cpc_crtc_registers[i]=header[24+i];
+
+
+  cpc_border_color=header[56];
+  cpc_crtc_last_selected_register=header[57];                      
+
+  cpc_set_memory_pages();
+}
+
 
 void load_zsf_tsconf_conf(z80_byte *header)
 {
@@ -741,17 +1256,40 @@ Byte fields:
   //ulaplus_set_extended_mode(zxuno_ports[0x40]);
 }
 
-void load_zsf_snapshot(char *filename)
+
+int load_zsf_eof(FILE *ptr_zsf_file,int longitud_memoria)
+{
+
+  if (ptr_zsf_file!=NULL) {
+    return feof(ptr_zsf_file);
+  }
+  else {
+    if (longitud_memoria>0) return 0;
+    else return 1; 
+  }
+
+}
+
+//Load snapshot de disco o desde memoria
+//Si leer de archivo, filename contiene nombre y no se usa origin_memory ni longitud_memoria
+//Si leer en memoria, filename es NULL y origin_memory contiene puntero origen memoria y longitud_memoria contiene longitud bloque memoria
+void load_zsf_snapshot_file_mem(char *filename,z80_byte *origin_memory,int longitud_memoria,int load_fast_mode)
 {
 
   FILE *ptr_zsf_file;
 
-  ptr_zsf_file=fopen(filename,"rb");
-  if (!ptr_zsf_file) {
-          debug_printf (VERBOSE_ERR,"Error reading snapshot file %s",filename);
-          return;
+  if (filename!=NULL) {
+    ptr_zsf_file=fopen(filename,"rb");
+    if (!ptr_zsf_file) {
+            debug_printf (VERBOSE_ERR,"Error reading snapshot file %s",filename);
+            return;
+    }
   }
 
+  else {
+    ptr_zsf_file=NULL;
+  }
+ 
 
   //Verificar que la cabecera inicial coincide
   //zsf_magic_header
@@ -761,13 +1299,22 @@ void load_zsf_snapshot(char *filename)
   int longitud_magic=strlen(zsf_magic_header);
 
 
-  int leidos=fread(buffer_magic_header,1,longitud_magic,ptr_zsf_file);
+  if (filename!=NULL) {
+    int leidos=fread(buffer_magic_header,1,longitud_magic,ptr_zsf_file);
 
-  if (leidos!=longitud_magic) {
-    debug_printf(VERBOSE_ERR,"Invalid ZSF file, small magic header");
-    fclose(ptr_zsf_file);
-    return;
+    if (leidos!=longitud_magic) {
+      debug_printf(VERBOSE_ERR,"Invalid ZSF file, small magic header");
+      fclose(ptr_zsf_file);
+      return;
+    }
   }
+
+  else {
+    memcpy(buffer_magic_header,origin_memory,longitud_magic);
+    origin_memory +=longitud_magic;
+    longitud_memoria -=longitud_magic;
+  }
+
 
   //Comparar texto
   buffer_magic_header[longitud_magic]=0;
@@ -782,9 +1329,24 @@ void load_zsf_snapshot(char *filename)
   z80_byte block_header[6];
 
   //Read blocks
-  while (!feof(ptr_zsf_file)) {
+  //while (!feof(ptr_zsf_file)) {
+  while (!load_zsf_eof(ptr_zsf_file,longitud_memoria)) {
     //Read header block
-    unsigned int leidos=fread(block_header,1,6,ptr_zsf_file);
+    unsigned int leidos;
+
+    if (filename!=NULL) {
+      leidos=fread(block_header,1,6,ptr_zsf_file);
+    }
+    else {
+      if (longitud_memoria>0) {
+        memcpy(block_header,origin_memory,6);
+        origin_memory +=6;      
+        leidos=6;
+        longitud_memoria -=6;
+      }
+      else leidos=0;
+    }
+
     if (leidos==0) break; //End while
 
     if (leidos!=6) {
@@ -796,7 +1358,7 @@ void load_zsf_snapshot(char *filename)
     block_id=value_8_to_16(block_header[1],block_header[0]);
     unsigned int block_lenght=block_header[2]+(block_header[3]*256)+(block_header[4]*65536)+(block_header[5]*16777216);
 
-    debug_printf (VERBOSE_INFO,"Block id: %u (%s) Lenght: %u",block_id,zsf_get_block_id_name(block_id),block_lenght);
+    debug_printf (VERBOSE_INFO,"Block id: %u (%s) Length: %u",block_id,zsf_get_block_id_name(block_id),block_lenght);
 
     z80_byte *block_data;
 
@@ -804,6 +1366,8 @@ void load_zsf_snapshot(char *filename)
     //Por si acaso inicializar a algo
     z80_byte buffer_nothing;
     block_data=&buffer_nothing;
+
+    int cambio_maquina=1;
 
     if (block_lenght) {
       block_data=malloc(block_lenght);
@@ -813,8 +1377,25 @@ void load_zsf_snapshot(char *filename)
         return;
       }
 
-      //Read block data
-      leidos=fread(block_data,1,block_lenght,ptr_zsf_file);
+      
+
+
+      if (filename!=NULL) {
+        //Read block data
+        leidos=fread(block_data,1,block_lenght,ptr_zsf_file);
+      }
+      else {
+        if (longitud_memoria>0) {
+          memcpy(block_data,origin_memory,block_lenght);
+          origin_memory +=block_lenght;      
+          leidos=block_lenght;
+          longitud_memoria -=block_lenght;
+        }
+        else leidos=0;
+      }
+
+
+
       if (leidos!=block_lenght) {
         debug_printf(VERBOSE_ERR,"Error reading snapshot file. Read: %u Expected: %u",leidos,block_lenght);
         return;
@@ -830,9 +1411,18 @@ void load_zsf_snapshot(char *filename)
       break;
 
       case ZSF_MACHINEID:
-        current_machine_type=*block_data;
-        set_machine(NULL);
-        reset_cpu();
+        //Si modo rapido, no resetea maquina al cargar snapshot, esto se usa en zeng
+        if (load_fast_mode) {
+          if (current_machine_type==*block_data) {
+            cambio_maquina=0;
+          }
+        }
+
+        if (cambio_maquina) {
+          current_machine_type=*block_data;
+          set_machine(NULL);
+          reset_cpu();
+        }
       break;
 
       case ZSF_Z80_REGS_ID:
@@ -888,6 +1478,46 @@ void load_zsf_snapshot(char *filename)
         load_zsf_tsconf_conf(block_data);
       break;
 
+      case ZSF_DIVIFACE_CONF:
+        load_zsf_diviface_conf(block_data);
+      break;  
+
+      case ZSF_DIVIFACE_MEM:
+        load_zsf_diviface_snapshot_block_data(block_data,block_lenght);
+      break;       
+
+      case ZSF_CPC_RAMBLOCK:
+        load_zsf_cpc_snapshot_block_data(block_data,block_lenght);
+      break;   
+
+      case ZSF_CPC_CONF:
+        load_zsf_cpc_conf(block_data);
+      break;     
+
+      case ZSF_PENTAGON_CONF:
+        load_zsf_pentagon_conf(block_data);
+      break;        
+
+      case ZSF_TBBLUE_RAMBLOCK:
+        load_zsf_tbblue_snapshot_block_data(block_data,block_lenght);
+      break;    
+
+      case ZSF_TBBLUE_CONF:
+        load_zsf_tbblue_conf(block_data);
+      break;         
+
+      case ZSF_TBBLUE_PALETTES:
+        load_zsf_tbblue_palettes(block_data);
+      break;      
+
+      case ZSF_TBBLUE_SPRITES:
+        load_zsf_tbblue_sprites(block_data);
+      break; 
+      
+      case ZSF_TIMEX:
+        load_zsf_timex(block_data);
+      break;            
+
       default:
         debug_printf(VERBOSE_ERR,"Unknown ZSF Block ID: %u. Continue anyway",block_id);
       break;
@@ -899,12 +1529,19 @@ void load_zsf_snapshot(char *filename)
 
   }
 
-  fclose(ptr_zsf_file);
+  if (filename!=NULL) fclose(ptr_zsf_file);
 
 
 }
 
-void save_zsf_snapshot_cpuregs(FILE *ptr)
+
+void load_zsf_snapshot(char *filename)
+{
+  load_zsf_snapshot_file_mem(filename,NULL,0,0);
+}
+
+
+void save_zsf_snapshot_cpuregs(FILE *ptr,z80_byte **destination_memory,int *longitud_total)
 {
 
   z80_byte header[27];
@@ -951,7 +1588,7 @@ void save_zsf_snapshot_cpuregs(FILE *ptr)
   z80_byte bits_estado=(iff1.v) | (im_mode==2 ? 2 : 0);
   header[26]=bits_estado;
 
-  zsf_write_block(ptr, header,ZSF_Z80_REGS_ID, 27);
+  zsf_write_block(ptr, destination_memory, longitud_total, header,ZSF_Z80_REGS_ID, 27);
 
 }
 
@@ -976,49 +1613,89 @@ int save_zsf_copyblock_compress_uncompres(z80_byte *origen,z80_byte *destino,int
   }
 }
 
-void save_zsf_snapshot(char *filename)
+
+
+
+
+
+//Guarda snapshot en disco on en memoria destino:
+//Si guardar en archivo, filename contiene nombre y no se usa destination_memory
+//Si guardar en memoria, filename es NULL y destination_memory contiene puntero destino memoria
+void save_zsf_snapshot_file_mem(char *filename,z80_byte *destination_memory,int *longitud_total)
 {
 
   FILE *ptr_zsf_file;
 
+  *longitud_total=0;
+
   //ZSF File
-  ptr_zsf_file=fopen(filename,"wb");
-  if (!ptr_zsf_file) {
-          debug_printf (VERBOSE_ERR,"Error writing snapshot file %s",filename);
-          return;
+  if (filename!=NULL) {
+    ptr_zsf_file=fopen(filename,"wb");
+    if (!ptr_zsf_file) {
+            debug_printf (VERBOSE_ERR,"Error writing snapshot file %s",filename);
+            return;
+    }
+  }
+  else {
+    ptr_zsf_file=NULL;
   }
 
+  int longitud_zsf_magic_header=strlen(zsf_magic_header);
 
-  //Save header
-  fwrite(zsf_magic_header, 1, strlen(zsf_magic_header), ptr_zsf_file);
+  if (filename!=NULL) {
+    //Save header
+    fwrite(zsf_magic_header, 1, longitud_zsf_magic_header, ptr_zsf_file);
+  }
+  else {
+    memcpy(destination_memory,zsf_magic_header,longitud_zsf_magic_header );
+    destination_memory +=longitud_zsf_magic_header;
+    (*longitud_total) +=longitud_zsf_magic_header;
+  }
   
 
 
   //First save machine ID
   z80_byte save_machine_id=current_machine_type;
-  zsf_write_block(ptr_zsf_file, &save_machine_id,ZSF_MACHINEID, 1);
+  zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, &save_machine_id,ZSF_MACHINEID, 1); 
 
 
 
   //Save cpu registers. Z80 or Moto or MK14
   if (CPU_IS_MOTOROLA) {
-
+    //TODO
   }
   else if (CPU_IS_SCMP) {
+    //TODO
   }
 
   else {
-    save_zsf_snapshot_cpuregs(ptr_zsf_file);
+    save_zsf_snapshot_cpuregs(ptr_zsf_file,&destination_memory,longitud_total);
   }
 
 
 
- //Ula block
-  z80_byte ulablock[1];
+ //Ula block y timex. En caso de Spectrum
+  if (MACHINE_IS_SPECTRUM) {
+    z80_byte ulablock[1];
 
-  ulablock[0]=out_254 & 7;
+    ulablock[0]=out_254 & 7;
 
-  zsf_write_block(ptr_zsf_file, ulablock,ZSF_ULA, 1);
+    zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, ulablock,ZSF_ULA, 1);
+    
+    
+    
+    
+    z80_byte timexblock[2];
+
+    timexblock[0]=timex_port_f4;
+    timexblock[1]=timex_port_ff;
+
+    zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, timexblock,ZSF_TIMEX, 2);
+    
+
+  }
+
+
 
   //ULAPlus block. Mejor que este esto hacia el principio, asi si por ejemplo se carga zxuno y esta un modo ulaplus extendido,
   //como radastan, no hay problema en que el modo ulaplus estandard esté desactivado
@@ -1039,7 +1716,7 @@ Byte fields:
         int i;
         for (i=0;i<64;i++) ulaplusblock[3+i]=ulaplus_palette_table[i];
 
-     zsf_write_block(ptr_zsf_file, ulaplusblock,ZSF_ULAPLUS, 67);
+     zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, ulaplusblock,ZSF_ULAPLUS, 67);
   }
 
   //Algunos flags zx80/81
@@ -1057,7 +1734,7 @@ Byte fields:
     zx8081confblock[1]=flags1;
     zx8081confblock[2]=flags2;
 
-    zsf_write_block(ptr_zsf_file, zx8081confblock,ZSF_ZX8081_CONF, 3);
+    zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, zx8081confblock,ZSF_ZX8081_CONF, 3);
 
 
   }
@@ -1116,7 +1793,7 @@ Byte fields:
     if (si_comprimido) compressed_ramblock[0]|=1;
 
     //Store block to file
-    zsf_write_block(ptr_zsf_file, compressed_ramblock,ZSF_RAMBLOCK, longitud_bloque+5);
+    zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, compressed_ramblock,ZSF_RAMBLOCK, longitud_bloque+5);
 
     free(compressed_ramblock);
 
@@ -1155,7 +1832,7 @@ Byte Fields:
 	memconf[1]=puerto_8189;
 	memconf[2]=mem128_multiplicador;
 
-  	zsf_write_block(ptr_zsf_file, memconf,ZSF_SPEC128_MEMCONF, 3);
+  	zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, memconf,ZSF_SPEC128_MEMCONF, 3);
 
 }
 
@@ -1163,13 +1840,24 @@ if (MACHINE_IS_ZXEVO) {
   //Grabar nvram
   z80_byte nvramblock[258];
 
-  nvramblock[0]=zxevo_last_port_eff7;
+  nvramblock[0]=puerto_eff7;
   nvramblock[1]=zxevo_last_port_dff7;
 
   int i;
   for (i=0;i<256;i++) nvramblock[i+2]=zxevo_nvram[i];
 
-  zsf_write_block(ptr_zsf_file, nvramblock,ZSF_ZXEVO_NVRAM, 258);
+  zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, nvramblock,ZSF_ZXEVO_NVRAM, 258);
+
+
+}
+
+if (MACHINE_IS_PENTAGON) {
+  //Grabar estado puertos
+  z80_byte pentagonconf[1];
+
+  pentagonconf[0]=puerto_eff7;
+
+  zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, pentagonconf,ZSF_PENTAGON_CONF, 1);
 
 
 }
@@ -1225,7 +1913,7 @@ Byte Fields:
 	  debug_printf(VERBOSE_DEBUG,"Saving ZSF_SPEC128_RAMBLOCK ram page: %d length: %d",ram_page,longitud_bloque);
 
 	  //Store block to file
-	  zsf_write_block(ptr_zsf_file, compressed_ramblock,ZSF_SPEC128_RAMBLOCK, longitud_bloque+6);
+	  zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, compressed_ramblock,ZSF_SPEC128_RAMBLOCK, longitud_bloque+6);
 
   }
 
@@ -1271,7 +1959,9 @@ Byte fields:
 
     for (i=0;i<8;i++) zxunoconfblock[266+i]=zxuno_spi_bus[i];
 
-    zsf_write_block(ptr_zsf_file, zxunoconfblock,ZSF_ZXUNO_CONF, 274);
+    zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, zxunoconfblock,ZSF_ZXUNO_CONF, 274);
+
+
 
 
 
@@ -1317,7 +2007,7 @@ Byte Fields:
     debug_printf(VERBOSE_DEBUG,"Saving ZSF_ZXUNO_RAMBLOCK ram page: %d length: %d",ram_page,longitud_bloque);
 
     //Store block to file
-    zsf_write_block(ptr_zsf_file, compressed_ramblock,ZSF_ZXUNO_RAMBLOCK, longitud_bloque+6);
+    zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, compressed_ramblock,ZSF_ZXUNO_RAMBLOCK, longitud_bloque+6);
 
   }
 
@@ -1325,6 +2015,327 @@ Byte Fields:
 
 
   }
+
+
+if (MACHINE_IS_TBBLUE) {
+
+  #define TBBLUECONFBLOCKSIZE (1+256+1+1+3+2+2048)
+    //z80_byte tbblueconfblock[TBBLUECONFBLOCKSIZE];
+
+    z80_byte *tbblueconfblock;
+
+    tbblueconfblock=malloc(TBBLUECONFBLOCKSIZE);
+
+    if (tbblueconfblock==NULL) {
+      cpu_panic("Cannot allocate memory for tbblue zsf saving");
+    }
+
+/*
+-Block ID 22: ZSF_TBBLUE_CONF
+0: tbblue_last_register
+1-256: 256 internal TBBLUE registers
+257: tbblue_bootrom_flag
+258: tbblue_port_123b
+259: Same 3 bytes as ZSF_DIVIFACE_CONF:
+
+  0: Memory size: Value of 2=32 kb, 3=64 kb, 4=128 kb, 5=256 kb, 6=512 kb
+  1: Diviface control register
+  2: Status bits:
+    Bit 0=If entered automatic divmmc paging.
+    Bit 1=If divmmc interface is enabled
+    Bit 2=If divmmc ports are enabled
+    Bit 3=If divide interface is enabled
+    Bit 4=If divide ports are enabled
+    Bits 5-7: unused by now
+
+262: Word: Copper PC
+264: Byte: Copper memory (currently 2048 bytes)
+2312:
+....
+
+
+....
+*/    
+
+  tbblueconfblock[0]=tbblue_last_register;
+  int i;
+  for (i=0;i<256;i++) tbblueconfblock[1+i]=tbblue_registers[i];
+
+  tbblueconfblock[257]=tbblue_bootrom.v;
+  tbblueconfblock[258]=tbblue_port_123b;
+
+  tbblueconfblock[259+0]=diviface_current_ram_memory_bits;
+  tbblueconfblock[259+1]=diviface_control_register;
+  tbblueconfblock[259+2]=diviface_paginacion_automatica_activa.v | (divmmc_diviface_enabled.v<<1) | (divmmc_mmc_ports_enabled.v<<2) | (divide_diviface_enabled.v<<3) | (divide_ide_ports_enabled.v<<4); 
+
+  tbblueconfblock[262]=value_16_to_8l(tbblue_copper_pc);
+  tbblueconfblock[262+1]=value_16_to_8h(tbblue_copper_pc);
+
+  for (i=0;i<2048;i++) {
+    tbblueconfblock[264+i]=tbblue_copper_memory[i];
+  }
+
+  zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, tbblueconfblock,ZSF_TBBLUE_CONF, TBBLUECONFBLOCKSIZE);
+  free(tbblueconfblock);
+
+
+  //
+  // Sprites
+  //
+
+  /*
+  ZSF_TBBLUE_SPRITES
+  */
+
+
+
+/*
+-Block ID 24: ZSF_TBBLUE_SPRITES
+0: 16KB with the sprite patterns
+16384: z80_byte tbsprite_sprites[TBBLUE_MAX_SPRITES][TBBLUE_SPRITE_ATTRIBUTE_SIZE];
+*/
+
+
+ #define TBBLUESPRITEBLOCKSIZE (16384+TBBLUE_MAX_SPRITES*TBBLUE_SPRITE_ATTRIBUTE_SIZE)
+
+    z80_byte *tbbluespriteblock;
+
+    tbbluespriteblock=malloc(TBBLUESPRITEBLOCKSIZE);
+
+    if (tbbluespriteblock==NULL) {
+      cpu_panic("Cannot allocate memory for tbblue zsf saving");
+    }
+
+
+  //Patterns de sprites
+  //z80_byte tbsprite_new_patterns[TBBLUE_SPRITE_ARRAY_PATTERN_SIZE];
+
+
+
+  for (i=0;i<TBBLUE_SPRITE_ARRAY_PATTERN_SIZE;i++) {
+    tbbluespriteblock[i]=tbsprite_new_patterns[i];
+  }
+
+
+  int spr,attr;
+  int indice=16384;
+  for (spr=0;spr<TBBLUE_MAX_SPRITES;spr++) {
+    for (attr=0;attr<TBBLUE_SPRITE_ATTRIBUTE_SIZE;attr++) {
+      tbbluespriteblock[indice]=tbsprite_sprites[spr][attr];
+
+      indice++;
+    }
+  }
+
+
+
+  zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, tbbluespriteblock,ZSF_TBBLUE_SPRITES, TBBLUESPRITEBLOCKSIZE);
+  free(tbbluespriteblock);
+
+
+
+
+
+
+
+
+  //
+  //Paletas de color
+  //
+/*
+-Block ID 23 ZSF_TBBLUE_PALETTES
+Colour palettes of TBBLUE machine
+Byte fields:
+0   -511 z80_int tbblue_palette_ula_first[256];
+512 -1023 z80_int tbblue_palette_ula_second[256];
+
+1024-1535 z80_int tbblue_palette_layer2_first[256];
+1536-2047 z80_int tbblue_palette_layer2_second[256];
+
+2048-2559 z80_int tbblue_palette_sprite_first[256];
+2560-3071 z80_int tbblue_palette_sprite_second[256];
+
+3072-3583 z80_int tbblue_palette_tilemap_first[256];
+3584-4095 z80_int tbblue_palette_tilemap_second[256];
+*/
+  #define TBBLUEPALETTESBLOCKSIZE 4096
+
+    z80_byte *tbbluepalettesblock;
+
+    tbbluepalettesblock=malloc(TBBLUEPALETTESBLOCKSIZE);
+
+    if (tbbluepalettesblock==NULL) {
+      cpu_panic("Cannot allocate memory for tbblue zsf saving");
+    }
+
+  for (i=0;i<256;i++) {
+
+    int offs=i*2;
+    util_store_value_little_endian(&tbbluepalettesblock[offs],tbblue_palette_ula_first[i]);
+    util_store_value_little_endian(&tbbluepalettesblock[512+offs],tbblue_palette_ula_second[i]);
+
+    util_store_value_little_endian(&tbbluepalettesblock[1024+offs],tbblue_palette_layer2_first[i]);
+    util_store_value_little_endian(&tbbluepalettesblock[1536+offs],tbblue_palette_layer2_second[i]);    
+
+    util_store_value_little_endian(&tbbluepalettesblock[2048+offs],tbblue_palette_sprite_first[i]);
+    util_store_value_little_endian(&tbbluepalettesblock[2560+offs],tbblue_palette_sprite_second[i]);       
+
+    util_store_value_little_endian(&tbbluepalettesblock[3072+offs],tbblue_palette_tilemap_first[i]);
+    util_store_value_little_endian(&tbbluepalettesblock[3584+offs],tbblue_palette_tilemap_second[i]);        
+  }
+
+
+  zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, tbbluepalettesblock,ZSF_TBBLUE_PALETTES, TBBLUEPALETTESBLOCKSIZE);
+  free(tbbluepalettesblock);
+
+
+
+
+  //
+  //Bloques de RAM
+  //
+
+   int longitud_ram=16384;
+
+   //Grabamos 
+
+  
+   //Para el bloque comprimido
+   z80_byte *compressed_ramblock=malloc(longitud_ram*2);
+  if (compressed_ramblock==NULL) {
+    debug_printf (VERBOSE_ERR,"Error allocating memory");
+    return;
+  }
+
+  /*
+
+-Block ID 21: ZSF_TBBLUE_RAMBLOCK
+A ram binary block for a tbblue. We store all the 2048 MB  (memoria_spectrum pointer). Total pages: 128
+Byte Fields:
+0: Flags. Currently: bit 0: if compressed with repetition block DD DD YY ZZ, where
+    YY is the byte to repeat and ZZ the number of repetitions (0 means 256)
+1,2: Block start address (currently unused)
+3,4: Block lenght
+5: ram block id (in blocks of 16kb)
+6 and next bytes: data bytes
+  */
+
+  int paginas=tbblue_get_current_ram()/16; //paginas de 16kb 
+  z80_byte ram_page;
+
+  for (ram_page=0;ram_page<paginas;ram_page++) {
+
+    compressed_ramblock[0]=0;
+    compressed_ramblock[1]=value_16_to_8l(16384);
+    compressed_ramblock[2]=value_16_to_8h(16384);
+    compressed_ramblock[3]=value_16_to_8l(longitud_ram);
+    compressed_ramblock[4]=value_16_to_8h(longitud_ram);
+    compressed_ramblock[5]=ram_page;
+
+    int si_comprimido;
+    int offset_pagina=16384*ram_page;
+    int longitud_bloque=save_zsf_copyblock_compress_uncompres(&memoria_spectrum[offset_pagina],&compressed_ramblock[6],longitud_ram,&si_comprimido);
+    if (si_comprimido) compressed_ramblock[0]|=1;
+
+    debug_printf(VERBOSE_DEBUG,"Saving ZSF_TBBLUE_RAMBLOCK ram page: %d length: %d",ram_page,longitud_bloque);
+
+    //Store block to file
+    zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, compressed_ramblock,ZSF_TBBLUE_RAMBLOCK, longitud_bloque+6);
+
+  }
+
+  free(compressed_ramblock);
+
+
+  }  
+
+if (MACHINE_IS_CPC) {
+  //Configuracion
+
+  z80_byte cpcconfblock[58];
+
+/*
+-Block ID 19: ZSF_CPC_CONF
+Ports and internal registers of CPC machine
+Byte fields:
+
+0-3: Gate registers
+4-19: Palette
+20-23: PPI ports
+24-55: CRTC registers
+56: Border color
+57: last crtc selected register
+
+*/    
+
+
+  int i;
+  for (i=0;i<4;i++)   cpcconfblock[i]=cpc_gate_registers[i];
+  for (i=0;i<16;i++)  cpcconfblock[4+i]=cpc_palette_table[i];
+  for (i=0;i<4;i++)   cpcconfblock[20+i]=cpc_ppi_ports[i];
+  for (i=0;i<32;i++)  cpcconfblock[24+i]=cpc_crtc_registers[i];
+
+
+  cpcconfblock[56]=cpc_border_color;
+  cpcconfblock[57]=cpc_crtc_last_selected_register;
+
+
+  zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, cpcconfblock,ZSF_CPC_CONF, 58);
+
+
+
+  //Paginas de memoria
+  int longitud_ram=16384;
+
+  
+   //Para el bloque comprimido
+   z80_byte *compressed_ramblock=malloc(longitud_ram*2);
+  if (compressed_ramblock==NULL) {
+    debug_printf (VERBOSE_ERR,"Error allocating memory");
+    return;
+  }
+
+  /*
+
+-Block ID 10: ZSF_CPC_RAMBLOCK
+A ram binary block for a cpc
+Byte Fields:
+0: Flags. Currently: bit 0: if compressed with repetition block DD DD YY ZZ, where
+    YY is the byte to repeat and ZZ the number of repetitions (0 means 256)
+1,2: Block start address (currently unused)
+3,4: Block lenght
+5: ram block id 
+6 and next bytes: data bytes
+  */
+
+  int paginas=4;
+  if (MACHINE_IS_CPC_4128) paginas=8;
+  z80_byte ram_page;
+
+  for (ram_page=0;ram_page<paginas;ram_page++) {
+
+    compressed_ramblock[0]=0;
+    compressed_ramblock[1]=value_16_to_8l(16384);
+    compressed_ramblock[2]=value_16_to_8h(16384);
+    compressed_ramblock[3]=value_16_to_8l(longitud_ram);
+    compressed_ramblock[4]=value_16_to_8h(longitud_ram);
+    compressed_ramblock[5]=ram_page;
+
+    int si_comprimido;
+    int longitud_bloque=save_zsf_copyblock_compress_uncompres(cpc_ram_mem_table[ram_page],&compressed_ramblock[6],longitud_ram,&si_comprimido);
+    if (si_comprimido) compressed_ramblock[0]|=1;
+
+    debug_printf(VERBOSE_DEBUG,"Saving ZSF_CPC_RAMBLOCK ram page: %d length: %d",ram_page,longitud_bloque);
+
+    //Store block to file
+    zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, compressed_ramblock,ZSF_CPC_RAMBLOCK, longitud_bloque+6);
+
+  }
+
+  free(compressed_ramblock);
+
+  
+}
 
 if (MACHINE_IS_TSCONF) {
 
@@ -1344,7 +2355,7 @@ Byte fields:
     for (i=0;i<256;i++) tsconfconfblock[i]=tsconf_af_ports[i];
     for (i=0;i<1024;i++) tsconfconfblock[i+256]=tsconf_fmaps[i];
 
-    zsf_write_block(ptr_zsf_file, tsconfconfblock,ZSF_TSCONF_CONF, 256+1024);
+    zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, tsconfconfblock,ZSF_TSCONF_CONF, 256+1024);
 
 
 
@@ -1390,7 +2401,7 @@ Byte Fields:
     debug_printf(VERBOSE_DEBUG,"Saving ZSF_TSCONF_RAMBLOCK ram page: %d length: %d",ram_page,longitud_bloque);
 
     //Store block to file
-    zsf_write_block(ptr_zsf_file, compressed_ramblock,ZSF_TSCONF_RAMBLOCK, longitud_bloque+6);
+    zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, compressed_ramblock,ZSF_TSCONF_RAMBLOCK, longitud_bloque+6);
 
   }
 
@@ -1422,17 +2433,130 @@ Byte fields:
       int j;
       for (j=0;j<16;j++) aycontents[3+j]=ay_3_8912_registros[i][j];
 
-      zsf_write_block(ptr_zsf_file, aycontents,ZSF_AYCHIP, 19);
+      zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, aycontents,ZSF_AYCHIP, 19);
     }
   }
 
+ //DIVMMC/DIVIDE config
+ //Solo si diviface esta habilitado 
+ //Esta parte tiene que estar despues de definir y cargar memoria de maquinas, sobre el final del archivo ZSF
+
+ //TODO: no estoy seguro que esto no haga falta para tbblue . probablemente tendra que ver con la manera peculiar de paginar tbblue
+ //o esto o bien poner este bloque se se cargue antes de ZSF_TBBLUE_CONF (quiza insertarlo ahi mismo dentro de ZSF_TBBLUE_CONF)
+ if (diviface_enabled.v==1 && !MACHINE_IS_TBBLUE) {
+
+/*-Block ID 16: ZSF_DIVIFACE_CONF
+Divmmc/divide common settings (diviface), in case it's enabled
+Byte fields:
+
+0: Memory size: Value of 2=32 kb, 3=64 kb, 4=128 kb, 5=256 kb, 6=512 kb
+1: Diviface control register
+2: Status bits: 
+  Bit 0=If entered automatic divmmc paging. 
+  Bit 1=If divmmc interface is enabled
+  Bit 2=If divmmc ports are enabled
+  Bit 3=If divide interface is enabled
+  Bit 4=If divide ports are enabled  
+  Bits 5-7: unused by now
+*/
+
+  z80_byte divifaceblock[3];
+
+  divifaceblock[0]=diviface_current_ram_memory_bits;
+  divifaceblock[1]=diviface_control_register;
+  divifaceblock[2]=diviface_paginacion_automatica_activa.v | (divmmc_diviface_enabled.v<<1) | (divmmc_mmc_ports_enabled.v<<2) | (divide_diviface_enabled.v<<3) | (divide_ide_ports_enabled.v<<4); 
+
+  zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, divifaceblock,ZSF_DIVIFACE_CONF, 3);
+
+  //memoria divmmc solo en el caso que no sea ni zxuno, ni tbblue ni prism 
+  if (!MACHINE_IS_ZXUNO && !MACHINE_IS_TBBLUE && !MACHINE_IS_PRISM) {
+  /*
+
+-Block ID 17: ZSF_DIVIFACE_MEM
+A ram binary block for diviface memory
+Byte Fields:
+0: Flags. Currently: bit 0: if compressed with repetition block DD DD YY ZZ, where
+    YY is the byte to repeat and ZZ the number of repetitions (0 means 256)
+1: ram block id 
+2 and next bytes: data bytes
+  */
+
+  //Para el bloque comprimido
+   z80_byte *compressed_ramblock=malloc(32768);
+  if (compressed_ramblock==NULL) {
+    debug_printf (VERBOSE_ERR,"Error allocating memory");
+    return;
+  }
+
+  int paginas=(DIVIFACE_FIRMWARE_ALLOCATED_KB+DIVIFACE_RAM_ALLOCATED_KB)/16;
+  z80_byte ram_page;
+
+  for (ram_page=0;ram_page<paginas;ram_page++) {
+
+    int longitud_ram=16384;
+
+    compressed_ramblock[0]=0;
+    compressed_ramblock[1]=ram_page;
+
+    int si_comprimido;
+
+    z80_byte *puntero_origen;
+    puntero_origen=&diviface_memory_pointer[16384*ram_page];
+
+    int longitud_bloque=save_zsf_copyblock_compress_uncompres(puntero_origen,&compressed_ramblock[2],longitud_ram,&si_comprimido);
+    if (si_comprimido) compressed_ramblock[0]|=1;
+
+    debug_printf(VERBOSE_DEBUG,"Saving ZSF_DIVIFACE_MEM ram page: %d length: %d",ram_page,longitud_bloque);
+
+    //Store block to file
+    zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, compressed_ramblock,ZSF_DIVIFACE_MEM, longitud_bloque+3);
+
+  }
+
+  free(compressed_ramblock);
+  }
+
+
+ }
  
+ //DIVMMC/DIVIDE memoria. En caso de maquinas que no son zxuno o tbblue o prism (dado que estas paginan memoria divmmc en su espacio de ram)
 
 
   //test meter un NOOP
-  zsf_write_block(ptr_zsf_file, NULL,0, 0);
+  zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, NULL,0, 0);
+
+  if (filename!=NULL) {
+    fclose(ptr_zsf_file);
+  }
+
+}
 
 
-  fclose(ptr_zsf_file);
+
+void save_zsf_snapshot(char *filename)
+{
+  //z80_byte *puntero;
+  //puntero=NULL;
+  int longitud;
+  //Realmente el NULL del puntero a memoria no seria necesario, ya que como el filename no es NULL, se usa el archivo y no se usa el puntero a memoria
+  //Y la longitud no la usamos
+  save_zsf_snapshot_file_mem(filename,NULL,&longitud);
+}
+
+z80_byte *pending_zrcp_put_snapshot_buffer_destino=NULL;
+int pending_zrcp_put_snapshot_longitud;
+
+void check_pending_zrcp_put_snapshot(void)
+{
+  //Enviar un snapshot que se habia leido por ZRCP. Aqui se llama al final de cada frame de pantalla
+
+  if (pending_zrcp_put_snapshot_buffer_destino!=NULL) {
+    debug_printf (VERBOSE_DEBUG,"Putting snapshot coming from ZRCP");
+
+    load_zsf_snapshot_file_mem(NULL,pending_zrcp_put_snapshot_buffer_destino,pending_zrcp_put_snapshot_longitud,1);
+
+    free(pending_zrcp_put_snapshot_buffer_destino);
+    pending_zrcp_put_snapshot_buffer_destino=NULL;
+  }
 
 }

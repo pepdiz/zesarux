@@ -76,18 +76,23 @@ char inputfile_name_rwa[PATH_MAX];
 void open_input_file(void)
 {
 
-	//Inicializar siempre esto. Sino se confunde si ha habido una conversion anterior
+	//Inicializar siempre esto. Si no se confunde si ha habido una conversion anterior
 	ptr_mycinta_smp=NULL;
 
 
 	if (!util_compare_file_extension(tapefile,"smp")) {
-		if (lee_smp_ya_convertido==0) convert_smp_to_rwa(tapefile,inputfile_name_rwa);
+		if (lee_smp_ya_convertido==0) {
+			convert_to_rwa_common_tmp(tapefile,inputfile_name_rwa);
+			convert_smp_to_rwa(tapefile,inputfile_name_rwa);
+		}
+
 		ptr_mycinta_smp=fopen(inputfile_name_rwa,"rb");
 		//printf ("convertido a rwa : %s\n",inputfile_name_rwa);
 	}
 
 	else if (!util_compare_file_extension(tapefile,"wav")) {
 		if (lee_smp_ya_convertido==0) {
+			convert_to_rwa_common_tmp(tapefile,inputfile_name_rwa);
 			if (convert_wav_to_rwa(tapefile,inputfile_name_rwa)) {
 				debug_printf (VERBOSE_ERR,"Error converting wav to rwa");
 				return;

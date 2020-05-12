@@ -179,6 +179,8 @@ void z88_gestionar_tim(void)
 //gestionar INT o NMI
 void z88_gestionar_interrupcion(void)
 {
+
+	debug_fired_interrupt=1;
                         //ver si esta en HALT
                         if (z80_ejecutando_halt.v) {
                                         z80_ejecutando_halt.v=0;
@@ -196,7 +198,7 @@ void z88_gestionar_interrupcion(void)
                                                 //printf ("Calling NMI with pc=0x%x\n",reg_pc);
                                                 //call_address(0x66);
 						iff1.v=0;
-                                                push_valor(reg_pc);
+                                                push_valor(reg_pc,PUSH_VALUE_TYPE_NON_MASKABLE_INTERRUPT);
                                                 reg_pc=0x66;
 
 
@@ -224,12 +226,9 @@ void z88_gestionar_interrupcion(void)
                                                 interrupcion_maskable_generada.v=0;
 
 
-                                                z80_byte reg_pc_h,reg_pc_l;
-                                                reg_pc_h=value_16_to_8h(reg_pc);
-                                                reg_pc_l=value_16_to_8l(reg_pc);
+                                              
 
-                                                poke_byte(--reg_sp,reg_pc_h);
-                                                poke_byte(--reg_sp,reg_pc_l);
+                                                push_valor(reg_pc,PUSH_VALUE_TYPE_MASKABLE_INTERRUPT);
 
                                                 reg_r++;
 
@@ -239,8 +238,7 @@ void z88_gestionar_interrupcion(void)
 						iff1.v=iff2.v=0;
 
                                                 if (im_mode==0 || im_mode==1) {
-                                                        reg_pc=56;
-                                                        t_estados += 7;
+                                                        cpu_common_jump_im01();
                                                 }
                                                 else {
                                                 //IM 2.
@@ -268,7 +266,6 @@ void z88_gestionar_interrupcion(void)
 void cpu_core_loop_z88(void)
 {
 
-                debug_get_t_stados_parcial_post();
                 debug_get_t_stados_parcial_pre();
 
 
@@ -417,12 +414,9 @@ void cpu_core_loop_z88(void)
                 	                audio_valor_enviar_sonido=audio_adjust_volume(audio_valor_enviar_sonido);
                         	}
 
+                                audio_send_mono_sample(audio_valor_enviar_sonido);
 
-				audio_buffer[audio_buffer_indice]=audio_valor_enviar_sonido;
 
-
-				if (audio_buffer_indice<AUDIO_BUFFER_SIZE-1) audio_buffer_indice++;
-				//else printf ("Overflow audio buffer: %d \n",audio_buffer_indice);
 
 			//}
 
@@ -549,5 +543,6 @@ void cpu_core_loop_z88(void)
 
                 }
 
+                debug_get_t_stados_parcial_post();
 
 }

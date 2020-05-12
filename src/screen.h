@@ -61,6 +61,24 @@ extern void (*scr_debug_registers)(void);
 extern void (*scr_messages_debug)(char *mensaje);
 
 extern void (*scr_putpixel) (int x,int y,unsigned int color);
+extern void (*scr_putpixel_final_rgb) (int x,int y,unsigned int color_rgb);
+extern void (*scr_putpixel_final) (int x,int y,unsigned int color);
+
+extern int (*scr_get_menu_width) (void);
+extern int (*scr_get_menu_height) (void);
+
+extern int (*scr_driver_can_ext_desktop) (void);
+
+extern int screen_ext_desktop_width;
+extern int screen_ext_desktop_enabled;
+
+extern int screen_get_ext_desktop_width_no_zoom(void);
+extern int screen_get_ext_desktop_width_zoom(void);
+
+extern void screen_init_ext_desktop(void);
+extern int screen_ext_desktop_place_menu;
+
+extern void scr_return_margenxy_rainbow(int *margenx_izq,int *margeny_arr);
 
 extern void (*scr_putpixel_zoom) (int x,int y,unsigned color);
 extern void (*scr_putpixel_zoom_rainbow)(int x,int y,unsigned int color);
@@ -97,6 +115,8 @@ extern int scr_get_4pixel_rainbow(int x,int y);
 
 extern int if_store_scanline_interlace(int y);
 
+extern void convertir_color_spectrum_paleta_to_rgb(z80_int valor,int *r,int *g,int *b);
+
 extern z80_byte compare_char(unsigned char *origen,unsigned char *inverse);
 extern z80_byte compare_char_step(z80_byte *origen,z80_byte *inverse,int step);
 extern z80_byte compare_char_tabla_step(z80_byte *origen,z80_byte *inverse,z80_byte *tabla_leemos,int step);
@@ -104,23 +124,42 @@ extern z80_byte compare_char_tabla_step(z80_byte *origen,z80_byte *inverse,z80_b
 extern z80_byte compare_char_tabla_rainbow(z80_byte *origen,z80_byte *inverse,z80_byte *tabla_leemos);
 extern int calcula_offset_screen (int x,int y);
 
-extern void (*scr_putchar_menu) (int x,int y, z80_byte caracter,z80_byte tinta,z80_byte papel);
-extern void (*scr_putchar_footer) (int x,int y, z80_byte caracter,z80_byte tinta,z80_byte papel);
-extern void scr_putsprite_comun(z80_byte *puntero,int x,int y,z80_bit inverse,z80_byte tinta,z80_byte papel,z80_bit fast_mode);
-extern void scr_putsprite_comun_zoom(z80_byte *puntero,int x,int y,z80_bit inverse,z80_byte tinta,z80_byte papel,z80_bit fast_mode,int zoom_level);
+extern void (*scr_putchar_menu) (int x,int y, z80_byte caracter,int tinta,int papel);
+extern void (*scr_putchar_footer) (int x,int y, z80_byte caracter,int tinta,int papel);
+extern void scr_putsprite_comun(z80_byte *puntero,int x,int y,z80_bit inverse,int tinta,int papel,z80_bit fast_mode);
+extern void scr_putsprite_comun_zoom(z80_byte *puntero,int x,int y,z80_bit inverse,int tinta,int papel,z80_bit fast_mode,int zoom_level);
+extern void scr_putchar_menu_comun_zoom(z80_byte caracter,int x,int y,z80_bit inverse,int tinta,int papel,int zoom_level);
+extern void scr_putchar_footer_comun_zoom(z80_byte caracter,int x,int y,z80_bit inverse,int tinta,int papel);
 
 extern void scr_putpixel_gui_zoom(int x,int y,int color,int zoom_level);
 
 extern int scr_tiene_colores;
 
-#define WINDOW_FOOTER_SIZE (8*3*menu_footer)
-#define WINDOW_FOOTER_PAPER (7+8)
-#define WINDOW_FOOTER_INK 0
+extern z80_bit ocr_settings_not_look_23606;
+
+
+#define WINDOW_FOOTER_LINES 3
+#define WINDOW_FOOTER_COLUMNS 32
+#define WINDOW_FOOTER_SIZE (8*WINDOW_FOOTER_LINES*menu_footer)
+
+
+//#define WINDOW_FOOTER_PAPER (7+8)
+//#define WINDOW_FOOTER_INK 0
+
+
+#define WINDOW_FOOTER_PAPER (ESTILO_GUI_PAPEL_NORMAL)
+#define WINDOW_FOOTER_INK (ESTILO_GUI_TINTA_NORMAL)
 
 extern char *scr_driver_name;
 
 extern z80_bit texto_artistico;
 extern int umbral_arttext;
+
+extern z80_bit screen_text_all_refresh_pixel;
+
+extern int screen_text_all_refresh_pixel_scale;
+
+extern z80_bit screen_text_all_refresh_pixel_invert;
 
 extern int screen_refresh_menu;
 
@@ -128,7 +167,8 @@ extern int screen_stdout_driver;
 extern int screen_simpletext_driver;
 
 extern void load_screen(char *scrfile);
-extern void save_screen(char *scrfile);
+extern void save_screen_scr(char *scrfile);
+extern void save_screen(char *screen_save_file);
 
 //extern z80_bit interlaced_frame_par;
 extern z80_byte interlaced_numero_frame;
@@ -138,6 +178,12 @@ extern z80_bit video_interlaced_mode;
 extern z80_bit video_interlaced_scanlines;
 
 extern z80_bit gigascreen_enabled;
+
+extern z80_bit pentagon_16c_mode_available;
+
+extern int screen_mode_16c_is_enabled(void);
+extern void enable_16c_mode(void);
+extern void disable_16c_mode(void);
 
 
 //Tamanyos pantalla para zxspectrum. Usados en funciones de repintado
@@ -207,6 +253,11 @@ extern z80_bit gigascreen_enabled;
 extern z80_bit rainbow_enabled;
 extern z80_bit autodetect_rainbow;
 
+extern z80_int *new_scalled_rainbow_buffer;
+
+extern void screen_scale_075_function(int ancho,int alto);
+
+extern z80_bit screen_reduce_075_antialias;
 
 //normalmente a 8
 extern int screen_invisible_borde_superior;
@@ -335,8 +386,9 @@ extern z80_bit autoframeskip;
 extern void cpu_loop_refresca_pantalla(void);
 
 extern int si_complete_video_driver(void);
+extern int si_normal_menu_video_driver(void);
 
-extern void screen_print(int x,int y,z80_byte tinta,z80_byte papel,char *mensaje);
+extern void screen_print(int x,int y,int tinta,int papel,char *mensaje);
 
 extern int screen_print_y;
 
@@ -373,6 +425,10 @@ extern void scr_refresca_pantalla_y_border_ace(void);
 extern void screen_text_repinta_pantalla_ace(void);
 
 extern void scr_refresca_pantalla_ace(void);
+
+extern void screen_text_repinta_pantalla_chloe(void);
+
+extern void screen_tbblue_refresca_pantalla(void);
 
 //extern void z88_return_character_atributes(z80_byte *sbr,int *ascii_caracter,int *ancho,int *inverse,int *subrallado,int *parpadeo,int *gris,int *null_caracter);
 
@@ -483,9 +539,33 @@ extern void screen_switch_rainbow_buffer(void);
 #define HEATMAP_INDEX_FIRST_COLOR (TSCONF_INDEX_FIRST_COLOR+TSCONF_TOTAL_PALETTE_COLOURS)
 #define HEATMAP_TOTAL_PALETTE_COLOURS 256
 
-//16 colores normales spectrum, 16 grises de modo scanline, 256 de gigascreen, 4 de z88, 16 de spectrum 17/48/+ real, 256 de ulaplus, 64 de spectra, 32 de CPC, 4096 de Prism, 128 de SAM, 256 de RGB8, 32768 de TSCONF
+#define SOLARIZED_INDEX_FIRST_COLOR (HEATMAP_INDEX_FIRST_COLOR+HEATMAP_TOTAL_PALETTE_COLOURS)
+#define SOLARIZED_TOTAL_PALETTE_COLOURS 16
+
+
+#define SOLARIZED_base03 (SOLARIZED_INDEX_FIRST_COLOR+0)
+
+
+#define SOLARIZED_COLOUR_base03  (SOLARIZED_INDEX_FIRST_COLOR+0)
+#define SOLARIZED_COLOUR_base02  (SOLARIZED_INDEX_FIRST_COLOR+1)
+#define SOLARIZED_COLOUR_base01  (SOLARIZED_INDEX_FIRST_COLOR+2)
+#define SOLARIZED_COLOUR_base00  (SOLARIZED_INDEX_FIRST_COLOR+3)
+#define SOLARIZED_COLOUR_base0   (SOLARIZED_INDEX_FIRST_COLOR+4)
+#define SOLARIZED_COLOUR_base1   (SOLARIZED_INDEX_FIRST_COLOR+5)
+#define SOLARIZED_COLOUR_base2   (SOLARIZED_INDEX_FIRST_COLOR+6)
+#define SOLARIZED_COLOUR_base3   (SOLARIZED_INDEX_FIRST_COLOR+7)
+#define SOLARIZED_COLOUR_yellow  (SOLARIZED_INDEX_FIRST_COLOR+8)
+#define SOLARIZED_COLOUR_orange  (SOLARIZED_INDEX_FIRST_COLOR+9)
+#define SOLARIZED_COLOUR_red     (SOLARIZED_INDEX_FIRST_COLOR+10)
+#define SOLARIZED_COLOUR_magenta (SOLARIZED_INDEX_FIRST_COLOR+11)
+#define SOLARIZED_COLOUR_violet  (SOLARIZED_INDEX_FIRST_COLOR+12)
+#define SOLARIZED_COLOUR_blue    (SOLARIZED_INDEX_FIRST_COLOR+13)
+#define SOLARIZED_COLOUR_cyan    (SOLARIZED_INDEX_FIRST_COLOR+14)
+#define SOLARIZED_COLOUR_green   (SOLARIZED_INDEX_FIRST_COLOR+15)
+
+//16 colores normales spectrum, 16 grises de modo scanline, 256 de gigascreen, 4 de z88, 16 de spectrum 17/48/+ real, 256 de ulaplus, 64 de spectra, 32 de CPC, 4096 de Prism, 128 de SAM, 256 de RGB8, 32768 de TSCONF, 16 de solarized
 //actualizar aqui y tambien estructura de total_palette_colours_array y #define TOTAL_PALETAS_COLORES 
-#define EMULATOR_TOTAL_PALETTE_COLOURS (SPECCY_TOTAL_PALETTE_COLOURS+SPECCY_GREY_SCANLINE_TOTAL_PALETTE_COLOURS+GIGASCREEN_TOTAL_PALETTE_COLOURS+Z88_TOTAL_PALETTE_COLOURS+ULAPLUS_TOTAL_PALETTE_COLOURS+SPECTRA_TOTAL_PALETTE_COLOURS+CPC_TOTAL_PALETTE_COLOURS+PRISM_TOTAL_PALETTE_COLOURS+SAM_TOTAL_PALETTE_COLOURS+RGB9_TOTAL_PALETTE_COLOURS+TSCONF_TOTAL_PALETTE_COLOURS+HEATMAP_TOTAL_PALETTE_COLOURS)
+#define EMULATOR_TOTAL_PALETTE_COLOURS (SPECCY_TOTAL_PALETTE_COLOURS+SPECCY_GREY_SCANLINE_TOTAL_PALETTE_COLOURS+GIGASCREEN_TOTAL_PALETTE_COLOURS+Z88_TOTAL_PALETTE_COLOURS+ULAPLUS_TOTAL_PALETTE_COLOURS+SPECTRA_TOTAL_PALETTE_COLOURS+CPC_TOTAL_PALETTE_COLOURS+PRISM_TOTAL_PALETTE_COLOURS+SAM_TOTAL_PALETTE_COLOURS+RGB9_TOTAL_PALETTE_COLOURS+TSCONF_TOTAL_PALETTE_COLOURS+HEATMAP_TOTAL_PALETTE_COLOURS+SOLARIZED_TOTAL_PALETTE_COLOURS)
 
 
 struct s_total_palette_colours {
@@ -519,9 +599,11 @@ extern void screen_set_colour_normal(int index, int colour);
 extern void screen_reset_putpixel_maxmin_y(void);
 extern int putpixel_max_y, putpixel_min_y;
 
-//extern void screen_print_splash_text(z80_byte y,z80_byte tinta,z80_byte papel,char *texto);
+
 extern z80_bit screen_show_splash_texts;
 extern z80_bit screen_show_cpu_usage;
+extern z80_bit screen_show_cpu_temp;
+extern z80_bit screen_show_fps;
 extern void screen_set_parameters_slow_machines(void);
 
 extern z80_bit mouse_pointer_shown;
@@ -624,6 +706,8 @@ extern int generic_footertext_operating_counter;
 extern void generic_footertext_print_operating(char *s);
 extern void delete_generic_footertext(void);
 
+extern int rgb_to_grey(int r,int g,int b);
+
 
 
 /*
@@ -709,6 +793,15 @@ extern int screen_watermark_position;
 
 extern z80_bit screen_watermark_enabled;
 
+extern void screen_put_watermark_generic(z80_int *destino,int x,int y,int ancho, void (*putpixel) (z80_int *destino,int x,int y,int ancho,int color) );
+extern void screen_put_asciibitmap_generic(char **origen,z80_int *destino,int x,int y,int ancho_orig, int alto_orig, int ancho_destino, void (*putpixel) (z80_int *destino,int x,int y,int ancho_destino,int color) );
+
+#define ZESARUX_WATERMARK_LOGO_MARGIN 4
+
+extern int screen_colores_rainbow[];
+extern int screen_colores_rainbow_nobrillo[];
+
+
 extern int scrstdout_simpletext_refresh_factor;
 
 extern void scr_set_fps_stdout_simpletext(int fps);
@@ -728,6 +821,45 @@ extern int screen_force_refresh;
 extern int screen_get_x_coordinate_tstates(int *si_salta_linea);
 
 extern int screen_get_y_coordinate_tstates(void);
+
+extern int screen_init_pantalla_and_others(void);
+extern void screen_init_pantalla_and_others_and_realjoystick(void);
+
+extern char *get_spectrum_ula_string_video_mode(void);
+
+extern int screen_ega_to_spectrum_colour(int ega_col);
+
+extern void screen_putpixel_mix_layers(int x,int y);
+
+#define MAX_MENU_MIX_METHODS 3
+
+extern char *screen_menu_mix_methods_strings[];
+
+extern int screen_menu_mix_method;
+extern int screen_menu_mix_transparency; 
+extern z80_bit screen_menu_reduce_bright_machine;
+extern void scr_clear_layer_menu(void);
+extern z80_bit screen_machine_bw_no_multitask;
+
+extern z80_int *buffer_layer_machine;
+extern z80_int *buffer_layer_menu;
+
+extern int ancho_layer_menu_machine;
+extern int alto_layer_menu_machine;	
+
+extern void scr_reallocate_layers_menu(int ancho,int alto);
+extern void scr_init_layers_menu(void);
+
+extern int sem_screen_refresh_reallocate_layers;
+
+
+
+extern void screen_end_pantalla_save_overlay(void (**previous_function)(void),int *menu_antes );
+extern void screen_restart_pantalla_restore_overlay(void (*previous_function)(void),int menu_antes);
+
+#define SCREEN_LAYER_TRANSPARENT_MENU 65535
+
+			
 
 
 #endif

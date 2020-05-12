@@ -178,7 +178,7 @@ void chardetect_print_splash_detected(void)
 	textspeech_print_speech(buffer);
 
 	if (scr_putpixel!=NULL) {
-		screen_print_splash_text(10,ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,buffer);
+		screen_print_splash_text_center(ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,buffer);
 	}
 }
 
@@ -437,7 +437,7 @@ void chardetect_detect_char(void)
 				
 				
 				//y siempre que reg_a sea ascii
-				if (reg_a>31 && reg_a<128) {
+				if (reg_a>31 && reg_a<127) {
 					
 					if (chardetect_detect_trap_aux(detection_pattern_multiply_eight,sizeof(detection_pattern_multiply_eight)) ) {
 						
@@ -578,7 +578,7 @@ void chardetect_init_automatic_char_detection(void)
 
                         printf ("\nWARNING: Setting internal writing Spectrum operations to a slow function, to use Automatic character detection routine\n");
 			if (scr_putpixel!=NULL) {
-				screen_print_splash_text(10,ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,"Setting internal writing Spectrum operations to a slow function");
+				screen_print_splash_text_center(ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,"Setting internal writing Spectrum operations to a slow function");
 			}
                 }
         }
@@ -593,7 +593,7 @@ void chardetect_end_automatic_char_detection(void)
 			debug_nested_poke_byte_del(chardetect_automatic_nested_id_poke_byte);
 			//poke_byte=original_char_detect_poke_byte;
 	                printf ("Setting internal writing Spectrum operations to normal mode\n");
-			screen_print_splash_text(10,ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,"Setting internal writing Spectrum operations to normal mode");
+			screen_print_splash_text_center(ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,"Setting internal writing Spectrum operations to normal mode");
 		//temp}
         }
 	chardetect_char_detection_automatic_finding_range=0;
@@ -775,6 +775,20 @@ void chardetect_printchar_espacio_si_mayus(z80_byte c)
 	
 }
 
+z80_byte chardetect_convert_daad_accents(z80_byte c)
+{
+			if (c=='\x15') c='a';
+			if (c=='\x16') c='e';
+			if (c=='\x17') c='i';
+			if (c=='\x18') c='o';
+			if (c=='\x19') c='u';
+
+			//eñe
+			if (c=='\x1a') c='n';
+
+			return c;	
+}
+
 z80_byte chardetect_printchar_caracter_gestion_filtros(z80_byte c)
 {
 	
@@ -809,6 +823,7 @@ z80_byte chardetect_printchar_caracter_gestion_filtros(z80_byte c)
 			
 			
 			//Acentuadas. De momento las retornamos tal cual sin acentos
+			/*
 			if (c=='\x15') {
 				//printf ("antes: %d\n",temp_antes_c);
 				c='a';
@@ -822,6 +837,9 @@ z80_byte chardetect_printchar_caracter_gestion_filtros(z80_byte c)
 
 			//eñe
 			if (c=='\x1a') c='n';
+			*/
+
+			c=chardetect_convert_daad_accents(c);
 			
 			//ignorar "_"
 			if (c=='_') c=0;
@@ -842,7 +860,7 @@ z80_byte chardetect_printchar_caracter_gestion_filtros(z80_byte c)
 			
 			
 			//Diosa cozumel genera texto "eeeeeeeeee" a veces. ignorar 3 seguidos
-			if (c>31 && c<128 && chardetect_printchar_ignorar_siguiente.v==0) {
+			if (c>31 && c<127 && chardetect_printchar_ignorar_siguiente.v==0) {
 				if (c=='e') {
 					chardetect_printchar_letras_e_seguidas++;
 					//printf (" letra e. conta: %d\n ",chardetect_printchar_letras_e_seguidas);
@@ -938,7 +956,7 @@ void chardetect_printchar_caracter(z80_byte c)
 	//Debug para ver caracteres especiales
 	//Parece ser que el juego "El anillo" utiliza caracteres > 128 (por ejemplo 201) para hacer espacios a final de linea
 	//O quiza es que los caracteres > 128 son tokens (conjuntos de letras) que salen del compresor de texto del PAWS
-	//if (c>=32 && c<=127) printf (" %c ",c);
+	//if (c>=32 && c<=126) printf (" %c ",c);
 	//else 
  	//printf (" %d=%c ",c,(c>31 && c<128 ? c : '.' ));
 
@@ -956,7 +974,7 @@ void chardetect_printchar_caracter(z80_byte c)
 		if (c==22) c=13;
 
 
-		if (c>31 && c<128) {
+		if (c>31 && c<127) {
 			chardetect_printchar_caracter_imprimible(c);
 			chardetect_printchar_caracter_anterior=c;
 		}

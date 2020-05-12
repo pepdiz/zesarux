@@ -31,6 +31,7 @@
 #include "debug.h"
 #include "tape.h"
 #include "audio.h"
+#include "ay38912.h"
 #include "screen.h"
 #include "operaciones.h"
 #include "snap.h"
@@ -54,7 +55,6 @@ z80_byte byte_leido_core_sam;
 void cpu_core_loop_sam(void)
 {
 
-		debug_get_t_stados_parcial_post();
 		debug_get_t_stados_parcial_pre();
   
 		timer_check_interrupt();
@@ -168,11 +168,15 @@ void cpu_core_loop_sam(void)
 
 			if (1==1) {
 
+				//TODO. detector de sonido en beeper provoca, que cuando salta, el output de sonido es extraño,
+				//cuando se combina con chip AY. forzar a no desactivarlo nunca
+				beeper_silence_detection_counter=0;
+
 				audio_valor_enviar_sonido=0;
 
-				/*
+				
 				audio_valor_enviar_sonido +=da_output_ay();
-				*/
+				
 
 
 				if (beeper_enabled.v) {
@@ -196,6 +200,8 @@ void cpu_core_loop_sam(void)
 					if (realtape_loading_sound.v) {
                         	        audio_valor_enviar_sonido /=2;
                                 	audio_valor_enviar_sonido += realtape_last_value/2;
+	                                //Sonido alterado cuando top speed
+        	                        if (timer_condicion_top_speed() ) audio_valor_enviar_sonido=audio_change_top_speed_sound(audio_valor_enviar_sonido);
 					}
 				}
 
@@ -204,18 +210,9 @@ void cpu_core_loop_sam(void)
 					audio_valor_enviar_sonido=audio_adjust_volume(audio_valor_enviar_sonido);
 				}
 
-				audio_buffer[audio_buffer_indice]=audio_valor_enviar_sonido;
+				audio_send_mono_sample(audio_valor_enviar_sonido);
 
-
-				//temporal
-				//printf ("%02X ",audio_valor_enviar_sonido);
-
-
-				if (audio_buffer_indice<AUDIO_BUFFER_SIZE-1) audio_buffer_indice++;
-				//else printf ("Overflow audio buffer: %d \n",audio_buffer_indice);
-
-
-				//ay_chip_siguiente_ciclo();
+				ay_chip_siguiente_ciclo();
 
 			}
 
@@ -259,9 +256,7 @@ void cpu_core_loop_sam(void)
                                 int linea_estados=t_estados/screen_testados_linea;
 
                                 while (linea_estados<312) {
-                                
-                                        audio_buffer[audio_buffer_indice]=audio_valor_enviar_sonido;
-                                        if (audio_buffer_indice<AUDIO_BUFFER_SIZE-1) audio_buffer_indice++;
+										audio_send_mono_sample(audio_valor_enviar_sonido);
                                         linea_estados++;
                                 }
 
@@ -355,6 +350,8 @@ void cpu_core_loop_sam(void)
 		//Interrupcion de cpu. gestion im0/1/2. Esto se hace al final de cada frame en spectrum o al cambio de bit6 de R en zx80/81
 		if (interrupcion_maskable_generada.v || interrupcion_non_maskable_generada.v) {
 
+			debug_fired_interrupt=1;
+
 			//printf ("Generada interrupcion Z80\n");
 
 			//if (interrupcion_non_maskable_generada.v) printf ("generada nmi\n");
@@ -378,14 +375,9 @@ void cpu_core_loop_sam(void)
                                                 t_estados += 14;
 
 
-                                                z80_byte reg_pc_h,reg_pc_l;
-                                                reg_pc_h=value_16_to_8h(reg_pc);
-                                                reg_pc_l=value_16_to_8l(reg_pc);
+                                              
 
-                                                //3 estados     
-                                                poke_byte(--reg_sp,reg_pc_h);
-                                                //3 estados
-                                                poke_byte(--reg_sp,reg_pc_l);
+												push_valor(reg_pc,PUSH_VALUE_TYPE_NON_MASKABLE_INTERRUPT);
 
 
                                                 reg_r++;
@@ -418,12 +410,9 @@ void cpu_core_loop_sam(void)
 						//Tratar interrupciones maskable
 						interrupcion_maskable_generada.v=0;
 
-						z80_byte reg_pc_h,reg_pc_l;
-                                                reg_pc_h=value_16_to_8h(reg_pc);
-                                                reg_pc_l=value_16_to_8l(reg_pc);
-
-                                                poke_byte(--reg_sp,reg_pc_h);
-                                                poke_byte(--reg_sp,reg_pc_l);
+					
+												
+												push_valor(reg_pc,PUSH_VALUE_TYPE_MASKABLE_INTERRUPT);
 
 						reg_r++;
 
@@ -445,19 +434,18 @@ void cpu_core_loop_sam(void)
 						//Modelos spectrum
 
 						if (im_mode==0 || im_mode==1) {
-							reg_pc=56;
-							t_estados += 7;
+							cpu_common_jump_im01();
 						}
 						else {
 						//IM 2.
 
-						        z80_int temp_i;
-                                                        z80_byte dir_l,dir_h;   
-                                                        temp_i=reg_i*256+255;
-                                                        dir_l=peek_byte(temp_i++);
-                                                        dir_h=peek_byte(temp_i);
-                                                        reg_pc=value_8_to_16(dir_h,dir_l);
-                                                        t_estados += 7;
+							z80_int temp_i;
+							z80_byte dir_l,dir_h;   
+							temp_i=reg_i*256+255;
+							dir_l=peek_byte(temp_i++);
+							dir_h=peek_byte(temp_i);
+							reg_pc=value_8_to_16(dir_h,dir_l);
+							t_estados += 7;
 
 
 						}
@@ -469,6 +457,7 @@ void cpu_core_loop_sam(void)
 			}
 
                 }
+		debug_get_t_stados_parcial_post();
 
 }
 

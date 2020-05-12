@@ -32,7 +32,6 @@
 #include "operaciones.h"
 #include "utils.h"
 #include "audio.h"
-#include "utils.h"
 #include "ay38912.h"
 #include "tape.h"
 
@@ -40,8 +39,8 @@
 //Direcciones donde estan cada pagina de rom. 2 paginas de 16 kb
 z80_byte *cpc_rom_mem_table[2];
 
-//Direcciones donde estan cada pagina de ram. 4 paginas de 16 kb cada una
-z80_byte *cpc_ram_mem_table[4];
+//Direcciones donde estan cada pagina de ram. 8 paginas de 16 kb cada una
+z80_byte *cpc_ram_mem_table[8];
 
 //Direcciones actuales mapeadas para lectura, bloques de 16 kb
 z80_byte *cpc_memory_paged_read[4];
@@ -179,19 +178,122 @@ z80_byte cpc_keyboard_table[16]={
 };
 
 
+z80_bit cpc_send_double_vsync={1};
+
+z80_bit cpc_vsync_signal={0};
+
 void cpc_set_memory_pages()
 {
 
+	//Array de paginas que entran. Por defecto en 64kb, paginas 0,1,2,3
+	int pages_array[4];
+
+	//Por defecto
+	pages_array[0]=0;
+	pages_array[1]=1;
+	pages_array[2]=2;
+	pages_array[3]=3;
+
+
+	//Si es maquina de 128kb, reasignar paginas
+	if (MACHINE_IS_CPC_4128) {
+		z80_byte ram_config=cpc_gate_registers[3] & 7;
+
+		//printf ("Setting 128k ram config value %d\n",ram_config);
+
+
+/*
+memoria extendida mas alla de 64 kb
+
+Register 3 - RAM Banking
+This register exists only in CPCs with 128K RAM (like the CPC 6128, or CPCs with Standard Memory Expansions). Note: In the CPC 6128, the register is a separate PAL that assists the Gate Array chip.
+
+Bit	Value	Function
+7	1	Gate Array function 3
+6	1
+5	b	64K bank number (0..7); always 0 on an unexpanded CPC6128, 0-7 on Standard Memory Expansions
+4	b
+3	b
+2	x	RAM Config (0..7)
+1	x
+0	x
+
+
+The 3bit RAM Config value is used to access the second 64K of the total 128K RAM that is built into the CPC 6128 
+or the additional 64K-512K of standard memory expansions. These contain up to eight 64K ram banks, 
+which are selected with bit 3-5. A standard CPC 6128 only contains bank 0. 
+Normally the register is set to 0, so that only the first 64K RAM are used (identical to the CPC 464 and 664 models). 
+The register can be used to select between the following eight predefined configurations only:
+
+ -Address-     0      1      2      3      4      5      6      7
+ 0000-3FFF   RAM_0  RAM_0  RAM_4  RAM_0  RAM_0  RAM_0  RAM_0  RAM_0
+ 4000-7FFF   RAM_1  RAM_1  RAM_5  RAM_3  RAM_4  RAM_5  RAM_6  RAM_7
+ 8000-BFFF   RAM_2  RAM_2  RAM_6  RAM_2  RAM_2  RAM_2  RAM_2  RAM_2
+ C000-FFFF   RAM_3  RAM_7  RAM_7  RAM_7  RAM_3  RAM_3  RAM_3  RAM_3
+The Video RAM is always located in the first 64K, VRAM is in no way affected by this register.
+
+*/	
+		switch (ram_config) {
+
+			case 1:
+				pages_array[3]=7;			
+			break;
+
+			case 2:
+				pages_array[0]=4;
+				pages_array[1]=5;
+				pages_array[2]=6;
+				pages_array[3]=7;			
+			break;
+
+			case 3:
+				pages_array[1]=3;
+				pages_array[3]=7;			
+			break;						
+
+			case 4:
+				pages_array[1]=4;
+			break;	
+
+			case 5:
+				pages_array[1]=5;		
+			break;	
+
+			case 6:
+				pages_array[1]=6;	
+			break;	
+
+			case 7:
+				pages_array[1]=7;		
+			break;													
+
+		}
+
+
+	}
+
+
+	//printf ("paginas que entran: %d %d %d %d\n",pages_array[0],pages_array[1],pages_array[2],pages_array[3]);
+
 	//Escritura siempre en RAM
 	int i;
-	for (i=0;i<4;i++) cpc_memory_paged_write[i]=cpc_ram_mem_table[i];
+	for (i=0;i<4;i++) {
+		//cpc_memory_paged_write[i]=cpc_ram_mem_table[i];
+		int pagina_entra=pages_array[i];
+		cpc_memory_paged_write[i]=cpc_ram_mem_table[pagina_entra];
+	}
+
+
+
+	int pagina_entra;
 
 	//Bloque 0-16383
 	if (cpc_gate_registers[2] &4 ) {
 		//Entra RAM
-		cpc_memory_paged_read[0]=cpc_ram_mem_table[0];
+		pagina_entra=pages_array[0];
+		cpc_memory_paged_read[0]=cpc_ram_mem_table[pagina_entra];
 		debug_cpc_type_memory_paged_read[0]=CPC_MEMORY_TYPE_RAM;
-		debug_cpc_paginas_memoria_mapeadas_read[0]=0;
+		debug_cpc_paginas_memoria_mapeadas_read[0]=pagina_entra;
 	}
 	else {
 		//Entra ROM
@@ -205,29 +307,33 @@ void cpc_set_memory_pages()
 
 	//Bloque 16384-32767
 	//RAM
-	cpc_memory_paged_read[1]=cpc_ram_mem_table[1];			
-	debug_cpc_paginas_memoria_mapeadas_read[1]=1;
-	debug_cpc_type_memory_paged_read[1]=CPC_MEMORY_TYPE_RAM;
+	pagina_entra=pages_array[1];
+	cpc_memory_paged_read[1]=cpc_ram_mem_table[pagina_entra];	
+	debug_cpc_type_memory_paged_read[1]=CPC_MEMORY_TYPE_RAM;		
+	debug_cpc_paginas_memoria_mapeadas_read[1]=pagina_entra;
+	
 
 	//Bloque 32768-49151
 	//RAM
-	cpc_memory_paged_read[2]=cpc_ram_mem_table[2];			
-	debug_cpc_paginas_memoria_mapeadas_read[2]=2;
+	pagina_entra=pages_array[2];
+	cpc_memory_paged_read[2]=cpc_ram_mem_table[pagina_entra];	
 	debug_cpc_type_memory_paged_read[2]=CPC_MEMORY_TYPE_RAM;
-
-        //Bloque 49152-65535
-        if (cpc_gate_registers[2] &8 ) {
-                //Entra RAM
-                cpc_memory_paged_read[3]=cpc_ram_mem_table[3];
+	debug_cpc_paginas_memoria_mapeadas_read[2]=2;
+	
+    //Bloque 49152-65535
+    if (cpc_gate_registers[2] &8 ) {
+    	//Entra RAM
+		pagina_entra=pages_array[3];
+        cpc_memory_paged_read[3]=cpc_ram_mem_table[pagina_entra];
 		debug_cpc_type_memory_paged_read[3]=CPC_MEMORY_TYPE_RAM;
-		debug_cpc_paginas_memoria_mapeadas_read[3]=3;
-        }
-        else {
-                //Entra ROM 
-                cpc_memory_paged_read[3]=cpc_rom_mem_table[1];
+		debug_cpc_paginas_memoria_mapeadas_read[3]=pagina_entra;
+    }
+    else {
+        //Entra ROM 
+        cpc_memory_paged_read[3]=cpc_rom_mem_table[1];
 		debug_cpc_type_memory_paged_read[3]=CPC_MEMORY_TYPE_ROM;
 		debug_cpc_paginas_memoria_mapeadas_read[3]=1;
-        }
+    }
 
 }
 
@@ -246,7 +352,7 @@ void cpc_init_memory_tables()
 
 
         int i;
-        for (i=0;i<4;i++) {
+        for (i=0;i<8;i++) {
                 cpc_ram_mem_table[i]=puntero;
                 puntero +=16384;
         }
@@ -337,7 +443,40 @@ note 1: This function is not available in the Gate-Array, but is performed by a 
 		break;
 
 		case 3:
-			//printf ("Memory management only on cpc 6128\n");
+			//printf ("Memory management only on cpc 6128. Setting value %02XH\n",value);
+			//Cambio paginacion en modos 128kb ram
+			cpc_set_memory_pages();
+/*
+Register 3 - RAM Banking
+This register exists only in CPCs with 128K RAM (like the CPC 6128, or CPCs with Standard Memory Expansions). Note: In the CPC 6128, the register is a separate PAL that assists the Gate Array chip.
+
+Bit	Value	Function
+7	1	Gate Array function 3
+6	1
+5	b	64K bank number (0..7); always 0 on an unexpanded CPC6128, 0-7 on Standard Memory Expansions
+4	b
+3	b
+2	x	RAM Config (0..7)
+1	x
+0	x
+
+
+The 3bit RAM Config value is used to access the second 64K of the total 128K RAM that is built into the CPC 6128 
+or the additional 64K-512K of standard memory expansions. 
+These contain up to eight 64K ram banks, which are selected with bit 3-5. A standard CPC 6128 only contains bank 0. 
+Normally the register is set to 0, so that only the first 64K RAM are used (identical to the CPC 464 and 664 models). 
+The register can be used to select between the following eight predefined configurations only:
+
+ -Address-     0      1      2      3      4      5      6      7
+ 0000-3FFF   RAM_0  RAM_0  RAM_4  RAM_0  RAM_0  RAM_0  RAM_0  RAM_0
+ 4000-7FFF   RAM_1  RAM_1  RAM_5  RAM_3  RAM_4  RAM_5  RAM_6  RAM_7
+ 8000-BFFF   RAM_2  RAM_2  RAM_6  RAM_2  RAM_2  RAM_2  RAM_2  RAM_2
+ C000-FFFF   RAM_3  RAM_7  RAM_7  RAM_7  RAM_3  RAM_3  RAM_3  RAM_3
+The Video RAM is always located in the first 64K, VRAM is in no way affected by this register.
+
+
+
+*/			
 		break;
 	}
 }
@@ -355,7 +494,7 @@ void init_cpc_line_display_table(void)
 	for (y=0;y<200;y++) {
 		offset=((y / 8) * 80) + ((y % 8) * 2048);
 		cpc_line_display_table[y]=offset;
-		debug_printf (VERBOSE_DEBUG,"Line: %d Offset: 0x%04X",y,offset);
+		debug_printf (VERBOSE_PARANOID,"CPC Line: %d Offset: 0x%04X",y,offset);
 	}
 }
 
@@ -368,9 +507,117 @@ void init_cpc_line_display_table(void)
 
 
 
+
+//Decir si vsync está activo o no, según en qué posición de pantalla estamos,
+//y resetear t_scanline_draw a 0 cuando finaliza dicha vsync
+//Ver http://www.cpcwiki.eu/index.php/CRTC#HSYNC_and_VSYNC
+/*
+The VSYNC is also modified before being sent to the monitor. It happens two lines* after the VSYNC from the CRTC 
+and stay two lines (same cut rule if VSYNC is lower than 4). PAL (50Hz) does need two lines VSYNC_width, and 4us HSYNC_width.
+*/
+void cpc_handle_vsync_state(void)
+{
+	//Duracion vsync
+	int vsync_lenght=cpc_crtc_registers[3]&15;
+
+	//Si es 0, en algunos chips significa 16
+	if (vsync_lenght==0) vsync_lenght=16;
+	//cpc_ppi_ports[1];
+
+	if (cpc_send_double_vsync.v) vsync_lenght *=2;	
+
+	int vsync_position=cpc_crtc_registers[7]&127;
+	//esta en caracteres
+	vsync_position *=8;
+
+
+	int final_vsync=vsync_position+vsync_lenght;
+
+	//Lo modificamos
+	//vsync_position +=2;
+
+	//final_vsync +=2;
+
+
+	if (t_scanline_draw>=vsync_position && t_scanline_draw<final_vsync) cpc_vsync_signal.v=1;
+	else cpc_vsync_signal.v=0;
+
+	//Y si está justo después, resetear posicion
+	if (t_scanline_draw==final_vsync) t_scanline_draw=0;
+
+	//printf ("vsync %d scanline %d scanline_draw %d\n",cpc_vsync_signal.v,t_scanline,t_scanline_draw);
+
+}
+
+z80_byte cpc_get_vsync_bit(void)
+{
+
+	//printf ("get vsync scanline %d scanline_draw %d : vsync %d\n",t_scanline,t_scanline_draw,cpc_vsync_signal.v);
+
+	//if (cpc_vsync_signal.v) printf ("1111111######\n");
+
+	return cpc_vsync_signal.v;
+}
+
+z80_byte old_cpc_get_vsync_bit(void)
+{
+				//Bit de vsync
+			//Duracion vsync
+			z80_byte vsync_lenght=cpc_crtc_registers[3]&15;
+
+			//Si es 0, en algunos chips significa 16
+			if (vsync_lenght==0) vsync_lenght=16;
+			//cpc_ppi_ports[1];
+
+		int vsync_position=cpc_crtc_registers[7]&127;
+		//esta en caracteres
+		vsync_position *=8;
+
+		int vertical_total=cpc_crtc_registers[4]+1; //en R0 tambien se suma 1
+		vertical_total *=8;
+
+		int vertical_displayed=cpc_crtc_registers[6];
+		vertical_displayed *=8;
+
+
+
+		//Dynamite dan 1 se pone a comprobar bit de rsync en lineas:
+		//0,52,104,156,208,260
+		//y vsync empieza en linea 240 y dura 14 lineas... no se cumple nunca
+		//esto sera debido a que los timings los tengo mal o las lineas se empiezan a contar diferente... anyway
+		//O al obtener la linea actual, no deberia ser t_scanline, sino t_scanline quitando la duracion del ultimo vsync
+
+		//workaround para algunos juegos, como bubble bobble. Lo hacemos durar mas
+		if (cpc_send_double_vsync.v) vsync_lenght *=2;		
+
+
+		int linea_actual=t_scanline;
+
+		//linea actual hay que evitar la zona no visible de arriba (precisamente el vsync)
+		linea_actual -=vsync_lenght;
+
+		if (linea_actual<0) {
+			//esta en vsync
+			return 1;
+		}
+
+		//Ver si esta en zona de vsync
+		//printf ("linea %d. lenght: %d vsync pos: %d vertical total: %d vertical displayed: %d\n",t_scanline,vsync_lenght,vsync_position,vertical_total,vertical_displayed);
+			if (linea_actual>=vsync_position && linea_actual<=vsync_position+vsync_lenght-1) {
+			//if (t_scanline>=0 && t_scanline<=7) {
+				//printf ("Enviando vsync\n");
+				return 1;
+			}
+
+			else {
+				//printf ("No Enviando vsync\n");
+				return 0;
+			}
+
+}
+
 //http://www.cpcwiki.eu/index.php/Programming:Keyboard_scanning
 //http://www.cpcwiki.eu/index.php/8255
-
 z80_byte cpc_in_ppi(z80_byte puerto_h)
 {
 	
@@ -413,10 +660,10 @@ I/O address	A9	A8	Description	Read/Write status	Used Direction	Used for
 					}
 
 			                //si estamos en el menu, no devolver tecla
-			                if (menu_abierto==1) return 255;
+			                if (zxvision_key_not_sent_emulated_mach() ) return 255;
 
            //Si esta spool file activo, generar siguiente tecla
-                if (input_file_keyboard_inserted.v==1) {
+                if (input_file_keyboard_is_playing() ) {
                                 input_file_keyboard_get_key();
                 }
 
@@ -450,7 +697,9 @@ I/O address	A9	A8	Description	Read/Write status	Used Direction	Used for
 			//Parallel, expansion port a 0
 			valor &=(255-64-32);
 
-			//Bit 0 (vsync) se actualiza en el core de cpc
+			//Bit 0 (vsync) 
+			valor &=(255-1);
+			valor |=cpc_get_vsync_bit();
 
  			if (realtape_inserted.v && realtape_playing.v) {
                         	if (realtape_last_value>=realtape_volumen) {
@@ -668,6 +917,6 @@ void cpc_splash_videomode_change(void) {
 
         }
 
-        screen_print_splash_text(10,ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,mensaje);
+        screen_print_splash_text_center(ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,mensaje);
 
 }

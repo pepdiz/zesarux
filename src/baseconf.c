@@ -66,7 +66,7 @@ z80_byte baseconf_last_port_bf;
 z80_byte baseconf_last_port_eff7;
 
 //ver Xpeccy - http://github.com/samstyle/Xpeccy Baseconf ports and memory maping is in ./src/libxpeccy/hardware/pentevo.c
-
+ 
 int baseconf_shadow_ports_available(void)
 {
 
@@ -80,6 +80,12 @@ int baseconf_shadow_ports_available(void)
         }
 
         return 0;
+}
+
+
+void lee_byte_evo_aux(z80_int direccion GCC_UNUSED)
+{
+        //TODO: funcion que se usa en el core baseconf de testing
 }
 
 void baseconf_reset_cpu(void)
@@ -159,7 +165,7 @@ void baseconf_set_memory_pages(void)
                         debug_paginas_memoria_mapeadas[i]=DEBUG_PAGINA_MAP_ES_ROM+pagina;
                 }
 
-                printf ("segmento %d pagina %d\n",i,pagina);
+                //printf ("segmento %d pagina %d\n",i,pagina);
         }
 	
 
@@ -218,7 +224,7 @@ baseconf_last_port_eff7;
 2: off for a 1 - mode ZX Spectrum 128k, otherwise - mode pentagon 1024k.
 Value after reset - 0.
 */
-        printf ("adjusting ram to bits port 7ffdh\n");
+        //printf ("adjusting ram to bits port 7ffdh\n");
 
         if (baseconf_last_port_eff7&4) {
                 //paginacion 128k
@@ -279,7 +285,7 @@ void baseconf_out_port(z80_int puerto,z80_byte valor)
         }
 
         else if (puerto==0xEFF7) {
-                printf ("setting port EFF7 value\n");
+                //printf ("setting port EFF7 value\n");
                 baseconf_last_port_eff7=valor;
                 baseconf_set_memory_pages();
         }
@@ -359,7 +365,7 @@ segmento 0 pagina 0
                 //baseconf_shadow_ports |=1;
 
                 //ram
-                baseconf_memory_segments[3]=valor%7;
+                baseconf_memory_segments[3]=valor&7;
                 baseconf_memory_segments_type[3]=1;
 
                 //rom
@@ -369,17 +375,21 @@ segmento 0 pagina 0
 
 
                 puerto_32765=valor;
+
+                baseconf_set_memory_pages();
+
+                //printf ("mapping segun puerto 32765\n");
         }
 
         //Puertos NVRAM. 
-	else if (puerto==0xeff7 && !baseconf_shadow_ports_available() ) zxevo_last_port_eff7=valor;
+	else if (puerto==0xeff7 && !baseconf_shadow_ports_available() ) puerto_eff7=valor;
 	else if (puerto==0xdff7 && !baseconf_shadow_ports_available() ) zxevo_last_port_dff7=valor;
         else if (puerto==0xdef7 && baseconf_shadow_ports_available() ) zxevo_last_port_dff7=valor;
 
 
 	else if (puerto==0xbff7 && !baseconf_shadow_ports_available() ) {
 						//Si esta permitida la escritura
-						if (zxevo_last_port_eff7&128) zxevo_nvram[zxevo_last_port_dff7]=valor;
+						if (puerto_eff7&128) zxevo_nvram[zxevo_last_port_dff7]=valor;
 	}
 
         else if (puerto==0xbef7 && baseconf_shadow_ports_available() ) {

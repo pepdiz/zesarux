@@ -93,7 +93,7 @@ int pos_buffer_tecla_comando=0;
 	
 
 //Usado en funciones de print del menu, para que hagan speech y pausa
-void scrstdout_menu_print_speech(char *texto)
+void scrstdout_menu_print_speech(char *texto_orig)
 {
 
 	//Para que el texto que se ha enviado a consola se fuerce a mostrar con fflush antes de enviar a speech	
@@ -101,6 +101,10 @@ void scrstdout_menu_print_speech(char *texto)
 
 	if (textspeech_filter_program==NULL) return;
 	if (textspeech_also_send_menu.v==0) return;
+
+	//pasar filtros de conversion de corchetes de menu [ ] [X] en "Disabled" o "Enabled"
+	char texto[MAX_BUFFER_SPEECH+1];
+	menu_textspeech_filter_corchetes(texto_orig,texto);	
 
 	textspeech_print_speech(texto);
 	
@@ -118,10 +122,17 @@ void scrstdout_menu_print_speech(char *texto)
 
 
 
+void scrstdout_putpixel_final_rgb(int x GCC_UNUSED,int y GCC_UNUSED,unsigned int color_rgb GCC_UNUSED)
+{
+}
+
+void scrstdout_putpixel_final(int x GCC_UNUSED,int y GCC_UNUSED,unsigned int color GCC_UNUSED)
+{
+}
 
 
 //Rutina de putchar para menu
-void scrstdout_putchar_menu(int x,int y, z80_byte caracter,z80_byte tinta,z80_byte papel)
+void scrstdout_putchar_menu(int x,int y, z80_byte caracter,int tinta,int papel)
 {
 	
 	//Para evitar warnings al compilar de "unused parameter"
@@ -132,7 +143,7 @@ void scrstdout_putchar_menu(int x,int y, z80_byte caracter,z80_byte tinta,z80_by
 	
 }
 
-void scrstdout_putchar_footer(int x,int y, z80_byte caracter,z80_byte tinta,z80_byte papel)
+void scrstdout_putchar_footer(int x,int y, z80_byte caracter,int tinta,int papel)
 {
 	
 	//Para evitar warnings al compilar de "unused parameter"
@@ -173,7 +184,7 @@ void scrtextspeech_filter_welcome_message(void)
 	textspeech_print_speech(texto_welcome);
 
 	
-	textspeech_print_speech("Press opening curly bracket to manual redraw screen. Press closing curly bracket to automatic redraw screen. Write 'menu' to open the menu");
+	textspeech_print_speech("Press opening curly bracket to manual redraw screen. Press closing curly bracket to automatic redraw screen. Write 'menu' to open the menu. Write 'esc' to simulate scape key on some menu dialogs");
 	
 	
 	char *mensaje_stop="You can stop listening to menu entries by pressing ENTER.";
@@ -189,13 +200,31 @@ void scrstdout_detectedchar_print(z80_byte caracter)
 
 }
 
+
+//Estos valores no deben ser mayores de OVERLAY_SCREEN_MAX_WIDTH y OVERLAY_SCREEN_MAX_HEIGTH
+int scrstdout_get_menu_width(void)
+{
+        return 32;
+}
+
+
+int scrstdout_get_menu_height(void)
+{
+        return 24;
+}
+
+int scrstdout_driver_can_ext_desktop (void)
+{
+        return 0;
+}
+
 //Null video drivers
 int scrstdout_init (void){ 
 	
 	debug_printf (VERBOSE_INFO,"Init stdout Video Driver"); 
 	
 	
-	printf ("Press { to manual redraw screen. Press } to automatic redraw screen\nWrite 'menu' to open the menu\n");
+	printf ("Press { to manual redraw screen. Press } to automatic redraw screen\nWrite 'menu' to open the menu\nWrite 'esc' to simulate ESC key on some menu dialogs\n");
 	
 	
 	//Mismos mensajes de bienvenida a traves de filtro texto
@@ -215,6 +244,13 @@ int scrstdout_init (void){
 	
 	scr_putchar_menu=scrstdout_putchar_menu;
 	scr_putchar_footer=scrstdout_putchar_footer;
+
+	scr_putpixel_final=scrstdout_putpixel_final;
+	scr_putpixel_final_rgb=scrstdout_putpixel_final_rgb;
+
+        scr_get_menu_width=scrstdout_get_menu_width;
+        scr_get_menu_height=scrstdout_get_menu_height;
+	scr_driver_can_ext_desktop=scrstdout_driver_can_ext_desktop;
 	
 	
 	scr_set_fullscreen=scrstdout_set_fullscreen;
@@ -223,11 +259,15 @@ int scrstdout_init (void){
 
 	scr_detectedchar_print=scrstdout_detectedchar_print;
 
-	//por defecto activamos esto en stdout, para que se capture el texto
-	chardetect_printchar_enabled.v=1;
+	//activamos esto en stdout, para que se capture el texto, pero si no tenemos el automatic redraw activado, 
+	//para evitar hacer redraw y a la vez hacer print de trap
+	if (stdout_simpletext_automatic_redraw.v==0) {
+		debug_printf(VERBOSE_DEBUG,"Enabling print char trap as the --autoredrawstdout setting is off");
+		chardetect_printchar_enabled.v=1;
+	}
 
 	//tambien activar que los textos de menus se envien a filtro (si es que hay filtro)
-	textspeech_also_send_menu.v=1;
+	//textspeech_also_send_menu.v=1;
 	
 	
 	scr_driver_name="stdout";
@@ -400,7 +440,12 @@ void scrstdout_actualiza_tablas_teclado(void){
 				//hacer acciones segun comando introducido
 				if (strlen(buffer_tecla_comando)>0) {
 					if (!strcmp(buffer_tecla_comando,"menu")) {
-						menu_abierto=1;
+						menu_fire_event_open_menu();
+					}
+
+
+					if (!strcmp(buffer_tecla_comando,"esc")) {
+						anterior_tecla=2;
 					}
 					
 					if (!strcmp(buffer_tecla_comando,"stoptext")) {
@@ -481,7 +526,13 @@ void scrstdout_establece_tablas_teclado(int c)
 	scrstdout_reset_teclas();
 	
 	if (c!=0) {
-		ascii_to_keyboard_port(c);
+
+		//tecla ESC
+		if (c==2) {
+			puerto_especial1 &=(255-1);
+		}
+
+		else ascii_to_keyboard_port(c);
 	}
 	
 }
@@ -534,11 +585,27 @@ void stdout_common_fun_saltolinea (void)
 
 void scrstdout_repinta_pantalla(void)
 {
+
+        if (sem_screen_refresh_reallocate_layers) {
+                //printf ("--Screen layers are being reallocated. return\n");
+                //debug_exec_show_backtrace();
+                return;
+        }
+
+        sem_screen_refresh_reallocate_layers=1;
 	
 	//enviar Ansi inicio pantalla
 	screen_text_send_ansi_go_home();
 	
-	if (MACHINE_IS_ZX8081) {
+	
+	 //si todo de pixel a ascii art
+     if (rainbow_enabled.v && screen_text_all_refresh_pixel.v) {
+     
+scr_refresca_pantalla_tsconf_text(stdout_common_fun_color,stdout_common_fun_caracter,stdout_common_fun_saltolinea,screen_text_all_refresh_pixel_scale);
+     
+     }
+	
+	else if (MACHINE_IS_ZX8081) {
 		screen_text_repinta_pantalla_zx81();
 	}
 	
@@ -568,11 +635,16 @@ void scrstdout_repinta_pantalla(void)
                 screen_text_repinta_pantalla_cpc();
         }
 
+	else if (MACHINE_IS_CHLOE) {
+		screen_text_repinta_pantalla_chloe();
+	}
+
 	else if (MACHINE_IS_TSCONF) {
 		//Si es modo texto, hacer este refresh:
 		z80_byte modo_video=tsconf_get_video_mode_display();
 		if (modo_video==3) {
 			scr_refresca_pantalla_tsconf_text_textmode(stdout_common_fun_color,stdout_common_fun_caracter,stdout_common_fun_saltolinea,12);
+			sem_screen_refresh_reallocate_layers=0;
 			return;
 		}
 
@@ -590,11 +662,14 @@ void scrstdout_repinta_pantalla(void)
 	}
 	
 	
+	
 	else {
 		//Refresco en Spectrum
 		screen_text_repinta_pantalla_spectrum();
 		
 	}
+
+sem_screen_refresh_reallocate_layers=0;
 	
 	
 }

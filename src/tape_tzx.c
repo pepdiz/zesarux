@@ -249,7 +249,7 @@ int tape_block_tzx_read(void *dir,int longitud)
 					//leemos longitud
 					z80_byte tzx_text_longitud;
 					fread(&tzx_text_longitud,1,1,ptr_mycinta_tzx);
-					debug_printf(VERBOSE_DEBUG,"TZX Block lenght: %d",tzx_text_longitud);
+					debug_printf(VERBOSE_DEBUG,"TZX Block length: %d",tzx_text_longitud);
 					z80_byte read_buffer[256];
 					fread(read_buffer,1,tzx_text_longitud,ptr_mycinta_tzx);
 					read_buffer[tzx_text_longitud]=0;
@@ -381,6 +381,19 @@ int tape_out_block_tzx_close(void)
         return 0;
 }
 
+void tape_write_tzx_header_ptr(FILE *ptr_archivo)
+{
+	//"ZXTape!",0x1a,version 1,subversion 20
+	//30, longitud, "Created by ZEsarUX emulator"
+	char cabecera[]={0x5a,0x58,0x54, 0x61, 0x70, 0x65, 0x21, 0x1a, 0x01, 0x14,
+	0x30,27,
+	0x43,0x72,0x65,0x61,0x74,0x65,0x64,0x20,0x62,0x79,0x20,0x5a,0x45,0x73,  
+        0x61,0x72,0x55,0x58,0x20,0x65,0x6d,0x75,0x6c,0x61,0x74,0x6f,0x72 
+	};
+
+	//no contamos el 0 del final
+	fwrite(cabecera, 1, sizeof(cabecera), ptr_archivo);	
+}
 
 void tape_write_tzx_header(void)
 {
@@ -403,6 +416,10 @@ void tape_write_tzx_header(void)
 
 	debug_printf(VERBOSE_INFO,"Writing TZX header");
 
+	tape_write_tzx_header_ptr(ptr_mycinta_tzx_out);
+
+	/*
+
 	//"ZXTape!",0x1a,version 1,subversion 20
 	//30, longitud, "Created by ZEsarUX emulator"
 	char cabecera[]={0x5a,0x58,0x54, 0x61, 0x70, 0x65, 0x21, 0x1a, 0x01, 0x14,
@@ -413,19 +430,15 @@ void tape_write_tzx_header(void)
 
 	//no contamos el 0 del final
 	fwrite(cabecera, 1, sizeof(cabecera), ptr_mycinta_tzx_out);
+	*/
 }
 
 
-void tape_block_tzx_begin_save(void)
+void tape_block_tzx_begin_save(int longitud GCC_UNUSED,z80_byte flag GCC_UNUSED)
 {
-
-
-        //if (tzx_save_no_header_yet==1) {
-                //Escribir cabecera tzx
-                tape_write_tzx_header();
-	//	tzx_save_no_header_yet=0;
-        //}
-
+ 
+	tape_write_tzx_header();
+	
 
 	//Escribir id 10	
 	//pausa de 1000 ms

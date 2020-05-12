@@ -42,26 +42,7 @@
 #endif
 
 //buffer de destino para pulse audio debe ser unsigned
-unsigned char unsigned_audio_buffer[AUDIO_BUFFER_SIZE];
-
-//convertir buffer de sonido signed en unsigned
-/*void convert_signed_unsigned(char *origen, unsigned char *destino)
-{
-        int i;
-        z80_byte leido;
-
-        for (i=0;i<AUDIO_BUFFER_SIZE;i++) {
-                leido=*origen;
-                leido=128+leido;
-
-                *destino=leido;
-                destino++;
-
-                origen++;
-        }
-
-}
-*/
+unsigned char unsigned_audio_buffer[AUDIO_BUFFER_SIZE*2]; //*2 porque es estereo
 
 
 #ifndef USE_PTHREADS
@@ -79,9 +60,11 @@ int audiopulse_init(void)
 
         debug_printf (VERBOSE_INFO,"Init Pulse Audio Driver - not using pthreads, %d Hz",FRECUENCIA_SONIDO);
 
+	//audio_driver_accepts_stereo.v=1;
+
 
         audiopulse_ss.format = PA_SAMPLE_U8;
-        audiopulse_ss.channels = 1;
+        audiopulse_ss.channels = 2;
         audiopulse_ss.rate = FRECUENCIA_SONIDO;
 
 
@@ -117,9 +100,9 @@ void audiopulse_send_frame(char *buffer)
 	//printf ("temp envio sonido\n");
 
 
-	convert_signed_unsigned(buffer,unsigned_audio_buffer,AUDIO_BUFFER_SIZE);
-
-        pa_simple_write (audiopulse_s,unsigned_audio_buffer,AUDIO_BUFFER_SIZE,&error);
+	convert_signed_unsigned(buffer,unsigned_audio_buffer,AUDIO_BUFFER_SIZE*2);  //*2 porque es estereo
+ 
+        pa_simple_write (audiopulse_s,unsigned_audio_buffer,AUDIO_BUFFER_SIZE*2,&error); //*2 porque es estereo
 
 
 
@@ -163,6 +146,8 @@ pa_sample_spec audiopulse_ss;
 int audiopulse_init(void)
 {
 
+	//audio_driver_accepts_stereo.v=1;
+
 
 	//Esto ocurre cuando los dos valen 4 y entonces la fifo siempre dice que esta llena
 	if (pulse_periodsize==fifo_pulse_buffer_size) fifo_pulse_buffer_size=AUDIO_BUFFER_SIZE*5;
@@ -171,7 +156,7 @@ int audiopulse_init(void)
 
 
 	audiopulse_ss.format = PA_SAMPLE_U8;
-	audiopulse_ss.channels = 1;
+	audiopulse_ss.channels = 2;
 	audiopulse_ss.rate = FRECUENCIA_SONIDO;
 
 
@@ -201,7 +186,7 @@ int audiopulse_init(void)
 
 
 //buffer temporal de envio. suficiente para que quepa
-char buf_enviar_pulse[AUDIO_BUFFER_SIZE*10];
+char buf_enviar_pulse[AUDIO_BUFFER_SIZE*10*2]; //*2 porque es estereo
 
 
 int fifo_pulse_write_position=0;
@@ -220,13 +205,18 @@ void audiopulse_empty_buffer(void)
 //Desde 4 hasta 10
 int fifo_pulse_buffer_size=AUDIO_BUFFER_SIZE*10;
 
-//1-4
-int pulse_periodsize=AUDIO_BUFFER_SIZE*1;
+//1-4.
+//Cuando habia sonido mono,por defecto estaba a 1
+//Con stereo, esta a 2
+int pulse_periodsize=AUDIO_BUFFER_SIZE*2;
 
 
-char fifo_pulse_buffer[MAX_FIFO_PULSE_BUFFER_SIZE];
+char fifo_pulse_buffer[MAX_FIFO_PULSE_BUFFER_SIZE*2]; //*2 porque es estereo
 
-
+int audiopulse_return_fifo_buffer_size(void)
+{
+  return fifo_pulse_buffer_size*2; //*2 porque es stereo
+}
 
 //retorna numero de elementos en la fifo_pulse
 int fifo_pulse_return_size(void)
@@ -240,13 +230,13 @@ int fifo_pulse_return_size(void)
 
         else {
                 //write es menor, cosa que quiere decir que hemos dado la vuelta
-                return (fifo_pulse_buffer_size-fifo_pulse_read_position)+fifo_pulse_write_position;
+                return (audiopulse_return_fifo_buffer_size()-fifo_pulse_read_position)+fifo_pulse_write_position;
         }
 }
 
 void audiopulse_get_buffer_info (int *buffer_size,int *current_size)
 {
-  *buffer_size=fifo_pulse_buffer_size;
+  *buffer_size=audiopulse_return_fifo_buffer_size();
   *current_size=fifo_pulse_return_size();
 }
 
@@ -254,7 +244,7 @@ void audiopulse_get_buffer_info (int *buffer_size,int *current_size)
 int fifo_pulse_next_index(int v)
 {
         v=v+1;
-        if (v==fifo_pulse_buffer_size) v=0;
+        if (v==audiopulse_return_fifo_buffer_size()) v=0;
 
         return v;
 }
@@ -279,6 +269,11 @@ void fifo_pulse_write(unsigned char *origen,int longitud)
                         return;
                 }
 
+		//Canal izquierdo
+                fifo_pulse_buffer[fifo_pulse_write_position]=*origen++;
+                fifo_pulse_write_position=fifo_pulse_next_index(fifo_pulse_write_position);
+
+		//Canal derecho
                 fifo_pulse_buffer[fifo_pulse_write_position]=*origen++;
                 fifo_pulse_write_position=fifo_pulse_next_index(fifo_pulse_write_position);
 	}
@@ -339,8 +334,6 @@ void audiopulse_end(void)
 }
 
 
-//#define LEN_PULSE AUDIO_BUFFER_SIZE*4
-
 
 void audiopulse_enviar_audio_envio(void)
 {
@@ -399,29 +392,6 @@ void *audiopulse_enviar_audio(void *nada)
 			//printf ("enviar. antes. tamanyo fifo: %d read %d write %d\n",fifo_pulse_return_size(),fifo_pulse_read_position,fifo_pulse_write_position);
 			audiopulse_enviar_audio_envio();
 
-
-		/*
-                while (audio_playing.v==0) {
-                        //1 ms
-                        usleep(1000);
-                }
-		*/
-
-		/*
-		desactivado esto. esto lo que hacia es que cuando audio no estaba playing (sin multitarea en menu o cuando se lee de cinta)
-		enviaba igualmente sonido (valor 128, onda plana)
-		if (audio_playing.v==0) {
-			debug_printf (VERBOSE_DEBUG,"Audio not playing, sending silence");
-			//enviamos silencio
-			int i;
-			unsigned char silencio=128;
-			for (i=0;i<pulse_periodsize;i++) {
-				fifo_pulse_write(&silencio,1);
-			}
-		}
-		*/
-
-
 	}
 
 	//para que no se queje el compilador de variable no usada
@@ -444,10 +414,6 @@ void audiopulse_send_frame(char *buffer)
                 buffer_playback_pulse=buffer;
                 audio_playing.v=1;
 
-		//Antes: Parece que si no reinicializamos el sonido la siguiente escritura se bloquea enviando sonido
-		//Manera facil de empezar de nuevo
-		//TODO: la alternativa seria gestionando buffer underrun
-		//audiopulse_init();
         }
 
         if (thread1_pulse==0) {
@@ -465,9 +431,7 @@ void audiopulse_send_frame(char *buffer)
                         //printf ("write. antes. tamanyo fifo: %d read %d write %d\n",fifo_pulse_return_size(),fifo_pulse_read_position,fifo_pulse_write_position);
 
 
-
-
-	convert_signed_unsigned(buffer,unsigned_audio_buffer,AUDIO_BUFFER_SIZE);
+	convert_signed_unsigned(buffer,unsigned_audio_buffer,AUDIO_BUFFER_SIZE*2); //*2 porque es estereo
 
 	fifo_pulse_write(unsigned_audio_buffer,AUDIO_BUFFER_SIZE);
 

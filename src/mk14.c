@@ -210,7 +210,7 @@ bit
 
 	if (dir<8) {
 		//printf ("--Leyendo tecla indice %d\n",dir);
-		if (menu_abierto) return 255;
+		if (zxvision_key_not_sent_emulated_mach() ) return 255;
 		else return mk14_keystatus[dir];
 
 

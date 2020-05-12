@@ -76,13 +76,14 @@ char **gArgv;
 
 
 
-
+//Silenciar avisos de OpenGL tipo: scrcocoa.m:638:3: warning: 'glEnable' is deprecated: first deprecated in macOS 10.14 - OpenGL API deprecated. (Define GL_SILENCE_DEPRECATION to silence these warnings) [-Wdeprecated-declarations]
+//En algun momento del futuro tocará migrar a Metal...
+#define GL_SILENCE_DEPRECATION  
 
 #import <Cocoa/Cocoa.h>
 
-#ifdef COCOA_OPENGL
-	#import <OpenGL/gl.h>
-#endif
+#import <OpenGL/gl.h>
+
 
 
 #ifndef MAC_OS_X_VERSION_10_4
@@ -94,15 +95,7 @@ char **gArgv;
 
 
 
-//#define DEBUG
 
-/*
-#ifdef DEBUG
-#define COCOA_DEBUG(...)  { (void) fprintf (stdout, __VA_ARGS__); }
-#else
-#define COCOA_DEBUG(...)  ((void) 0)
-#endif
-*/
 
 //caps lock en mac no envia keyup y keydown
 //hacemos que cuando se envia evento de caps, activar caps durante un rato
@@ -433,11 +426,9 @@ int pendiente_z88_draw_lower=0;
  ------------------------------------------------------
 */
 
-#ifdef COCOA_OPENGL
+
 @interface ZesaruxCocoaView : NSOpenGLView
-#else
-@interface ZesaruxCocoaView : NSView
-#endif
+
 
 
 {
@@ -450,8 +441,7 @@ int pendiente_z88_draw_lower=0;
     //BOOL isFullscreen;
     BOOL isAbsoluteEnabled;
     BOOL isTabletEnabled;
-
-		uint texId;
+    uint texId;
 }
 
 //- (void) resizeContentToWidth:(int)w height:(int)h displayState:(DisplayState *)ds;
@@ -483,8 +473,9 @@ int pendiente_z88_draw_lower=0;
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(windowDidEndLiveResize:) name:NSWindowDidEndLiveResizeNotification object:nil];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(windowWillStartLiveResize:) name:NSWindowWillStartLiveResizeNotification object:nil];
 
-
 }
+
+
 
 - (void)redimensionaVentana:(int)width height:(int)height
 {
@@ -493,13 +484,12 @@ int pendiente_z88_draw_lower=0;
 	NSWindow *laventana=normalWindow;
 
 
-
         int zoom_x_calculado,zoom_y_calculado;
 
-        debug_printf (VERBOSE_INFO,"width: %d get_window_width: %d height: %d get_window_height: %d",width,screen_get_window_size_width_no_zoom_border_en(),height,screen_get_window_size_height_no_zoom_border_en());
+        debug_printf (VERBOSE_INFO,"zoom_x %d zoom_y %d width: %d get_window_width: %d height: %d get_window_height: %d",zoom_x,zoom_y,width,screen_get_window_size_width_no_zoom_border_en(),height,screen_get_window_size_height_no_zoom_border_en());
 
 
-        zoom_x_calculado=width/screen_get_window_size_width_no_zoom_border_en();
+        zoom_x_calculado=width/(screen_get_window_size_width_no_zoom_border_en()+screen_get_ext_desktop_width_no_zoom() );
         zoom_y_calculado=height/screen_get_window_size_height_no_zoom_border_en();
 
 
@@ -517,14 +507,16 @@ int pendiente_z88_draw_lower=0;
                 set_putpixel_zoom();
         }
 
-    pixel_screen_width = screen_get_window_size_width_zoom_border_en();
-    pixel_screen_height = screen_get_window_size_height_zoom_border_en();
+        pixel_screen_width = screen_get_window_size_width_zoom_border_en();
+        pixel_screen_width += screen_get_ext_desktop_width_zoom();
 
-    NSInteger dataLength = pixel_screen_width * pixel_screen_height * 4;
-    pixel_screen_data = (UInt8*)malloc(dataLength * sizeof(UInt8));
+        pixel_screen_height = screen_get_window_size_height_zoom_border_en();
 
-   ZesaruxCocoaView *elview;
-   elview=[ laventana contentView ];
+        NSInteger dataLength = pixel_screen_width * pixel_screen_height * 4;
+        pixel_screen_data = (UInt8*)malloc(dataLength * sizeof(UInt8));
+
+        ZesaruxCocoaView *elview;
+        elview=[ laventana contentView ];
 
         NSSize nuevosize;
         nuevosize.width=pixel_screen_width;
@@ -542,7 +534,9 @@ int pendiente_z88_draw_lower=0;
         [elview setContentDimensions];
 
         [elview setFrame:NSMakeRect(0, 0, pixel_screen_width, pixel_screen_height)];
-   [ [ laventana contentView ] resizeContentToWidth:(int)(pixel_screen_width) height:(int)(pixel_screen_height) ];
+        [ [ laventana contentView ] resizeContentToWidth:(int)(pixel_screen_width) height:(int)(pixel_screen_height) ];
+
+   //printf ("resize: %d X %d\n",width,height);
 
 }
 
@@ -556,8 +550,6 @@ int pendiente_z88_draw_lower=0;
 	pendingresize_h=0;
 
 	debug_printf(VERBOSE_INFO,"The window is going to be resized");
-
-
 
 
 }
@@ -584,6 +576,10 @@ int pendiente_z88_draw_lower=0;
 	pendingresize_h=height;
 
 
+	[normalWindow redimensionaVentana:pendingresize_w height:pendingresize_h];
+	pendingresize=0;        
+
+
 }
 
 
@@ -592,7 +588,7 @@ int pendiente_z88_draw_lower=0;
 
 @implementation ZesaruxCocoaView
 
-#ifdef COCOA_OPENGL
+
 
 -(void)prepareOpenGL
 {
@@ -610,8 +606,8 @@ int pendiente_z88_draw_lower=0;
 
 	//printf ("createTexture %ld %ld\n",pixel_screen_width, pixel_screen_height);
 
-NSInteger ancho;
-NSInteger alto;
+        NSInteger ancho;
+        NSInteger alto;
 
 	ancho=pixel_screen_width;
 	alto=pixel_screen_height;
@@ -624,76 +620,75 @@ NSInteger alto;
 
 
 
+        glEnable(GL_TEXTURE_2D);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-  glEnable(GL_TEXTURE_2D);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glGenTextures(1, &texId); //Creamos una textura
 
-  glGenTextures(1, &texId); //Creamos una textura
+        glBindTexture(GL_TEXTURE_2D, texId);
 
-  glBindTexture(GL_TEXTURE_2D, texId);
+        //Configuramos la textura
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 
-  //Configuramos la textura
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-
-  //No copiamos nada lo haremos luego (le pasamos null)
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ancho, alto, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+        //No copiamos nada lo haremos luego (le pasamos null)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ancho, alto, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
 }
 
 - (void)render {
 
 
-// CGLLockContext([[self openGLContext] CGLContextObj]);
+        // CGLLockContext([[self openGLContext] CGLContextObj]);
 
-  [[self openGLContext] makeCurrentContext];
-
-
-  glViewport(0,0,pixel_screen_width, pixel_screen_height);
+        [[self openGLContext] makeCurrentContext];
 
 
-
-  //NO BORRAMOS el fondo porque ya lo dibujamos más abajo
-
-  glBindTexture(GL_TEXTURE_2D, texId);
-  //Actualizamos la textura
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, pixel_screen_width, pixel_screen_height, 0, GL_BGRA, GL_UNSIGNED_BYTE, pixel_screen_data);
-
-  glBegin(GL_QUADS);
-  glColor4d(1.0,1.0,1.0,1.0); //Color blanco se multiplica con el color de los pixeles de la textura.
-
-  glTexCoord2d(0,1);
-  glVertex2d(-1.0, -1.0);
-
-  glTexCoord2d(1,1);
-  glVertex2d(1.0,-1.0);
-
-  glTexCoord2d(1,0);
-  glVertex2d(1.0,1.0);
-
-  glTexCoord2d(0,0);
-  glVertex2d(-1.0,1.0);
-  glEnd();
-
-  [[self openGLContext] flushBuffer];
-
-glFlush();
-/*
-The documentation for -[NSOpenGLContext flushBuffer] says:
-
-Discussion
-
-If the receiver is not a double-buffered context, this call does nothing.
-You can cause your context to be double-buffered by including NSOpenGLPFADoubleBuffer in your pixel format attributes. Alternatively, you can call glFlush() instead of -[NSOpenGLContext flushBuffer] and leave your context single-buffered.
-*/
+        glViewport(0,0,pixel_screen_width, pixel_screen_height);
 
 
-// CGLUnlockContext([[self openGLContext] CGLContextObj]);
+
+        //NO BORRAMOS el fondo porque ya lo dibujamos más abajo
+
+        glBindTexture(GL_TEXTURE_2D, texId);
+        //Actualizamos la textura
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, pixel_screen_width, pixel_screen_height, 0, GL_BGRA, GL_UNSIGNED_BYTE, pixel_screen_data);
+
+        glBegin(GL_QUADS);
+        glColor4d(1.0,1.0,1.0,1.0); //Color blanco se multiplica con el color de los pixeles de la textura.
+
+        glTexCoord2d(0,1);
+        glVertex2d(-1.0, -1.0);
+
+        glTexCoord2d(1,1);
+        glVertex2d(1.0,-1.0);
+
+        glTexCoord2d(1,0);
+        glVertex2d(1.0,1.0);
+
+        glTexCoord2d(0,0);
+        glVertex2d(-1.0,1.0);
+        glEnd();
+
+        [[self openGLContext] flushBuffer];
+
+        glFlush();
+        /*
+        The documentation for -[NSOpenGLContext flushBuffer] says:
+
+        Discussion
+
+        If the receiver is not a double-buffered context, this call does nothing.
+        You can cause your context to be double-buffered by including NSOpenGLPFADoubleBuffer in your pixel format attributes. Alternatively, you can call glFlush() instead of -[NSOpenGLContext flushBuffer] and leave your context single-buffered.
+        */
+
+
+        // CGLUnlockContext([[self openGLContext] CGLContextObj]);
 }
 
-#endif
+
 
 - (id)initWithFrame:(NSRect)frameRect
 {
@@ -714,8 +709,15 @@ You can cause your context to be double-buffered by including NSOpenGLPFADoubleB
 [self registerForDraggedTypes:
       [NSArray arrayWithObjects:NSTIFFPboardType,NSFilenamesPboardType,nil]];
 
+//[self registerForDraggedTypes: 
+  //    [NSArray arrayWithObjects:NSPasteboardTypeTIFF,NSFilenamesPboardType,nil]];
+
+      //[self registerForDraggedTypes([NSFilenamesPboardType]) ];
+
+
     return self;
 }
+
 
 - (NSDragOperation)draggingEntered:(id <NSDraggingInfo>)sender
 {
@@ -778,6 +780,8 @@ if ((NSDragOperationGeneric & [sender draggingSourceOperationMask])
       NSArray *zFileNamesAry =
              [zPasteboard propertyListForType:@"NSFilenamesPboardType"];
       NSString *zPath = [zFileNamesAry objectAtIndex:0];
+
+
 //printf ("Path: %s\n",[zPath UTF8String]);
 /*
       NSImage *zNewImage = [[NSImage alloc] initWithContentsOfFile:zPath];
@@ -793,6 +797,7 @@ if ((NSDragOperationGeneric & [sender draggingSourceOperationMask])
 */
 
 
+
 	strcpy(quickload_file,[zPath UTF8String]);
 
 
@@ -803,9 +808,11 @@ if ((NSDragOperationGeneric & [sender draggingSourceOperationMask])
 
    }// end if
 
+
    //this cant happen ???
    NSLog(@"Error MyNSView performDragOperation");
    return NO;
+
 
 } // end performDragOperation
 
@@ -833,32 +840,39 @@ if ((NSDragOperationGeneric & [sender draggingSourceOperationMask])
 	util_set_reset_mouse(UTIL_MOUSE_RIGHT_BUTTON,0);
 }
 
+- (void)scrollWheel:(NSEvent *)event
+{
+	debug_printf (VERBOSE_PARANOID,"Scroll wheel scrolled %f horizontally and %f vertically", [event deltaX], [event deltaY]);
+        mouse_wheel_horizontal=[event deltaX];
+        mouse_wheel_vertical=[event deltaY];
+}
+
 - (void)leftrightmouseDown:(int)x y:(int)y
 {
-                        gunstick_x=x;
-                        gunstick_y=y;
+        gunstick_x=x;
+        gunstick_y=y;
 
-			//0,0 en cocoa esta abajo a la izquierda
-			//por tanto, para coordenada y, restamos del tope la coordenada y
-                        gunstick_x=gunstick_x/zoom_x;
-                        gunstick_y=screen_get_window_size_height_no_zoom_border_en()-gunstick_y/zoom_y;
+        //0,0 en cocoa esta abajo a la izquierda
+        //por tanto, para coordenada y, restamos del tope la coordenada y
+        gunstick_x=gunstick_x/zoom_x;
+        gunstick_y=screen_get_window_size_height_no_zoom_border_en()-gunstick_y/zoom_y;
 
-                        debug_printf (VERBOSE_DEBUG,"Mouse Button press. x=%d y=%d. gunstick: x: %d y: %d", x, y,gunstick_x,gunstick_y);
+        debug_printf (VERBOSE_DEBUG,"Mouse Button press. x=%d y=%d. gunstick: x: %d y: %d", x, y,gunstick_x,gunstick_y);
 
 }
 
 - (void)mouseDown:(NSEvent *)event
 {
 
-NSPoint locationInView = [self convertPoint:[event locationInWindow]
+        NSPoint locationInView = [self convertPoint:[event locationInWindow]
                                        fromView:nil];
 
-                      //mouse_left=1;
-											util_set_reset_mouse(UTIL_MOUSE_LEFT_BUTTON,1);
+        //mouse_left=1;
+        util_set_reset_mouse(UTIL_MOUSE_LEFT_BUTTON,1);
 
-			//0,0 en cocoa esta abajo a la izquierda
-			int posx=locationInView.x;
-			int posy=locationInView.y;
+        //0,0 en cocoa esta abajo a la izquierda
+        int posx=locationInView.x;
+        int posy=locationInView.y;
 
 	[self leftrightmouseDown:posx y:posy];
 
@@ -868,15 +882,15 @@ NSPoint locationInView = [self convertPoint:[event locationInWindow]
 - (void)rightMouseDown:(NSEvent *)event
 {
 
-NSPoint locationInView = [self convertPoint:[event locationInWindow]
-                                       fromView:nil];
+        NSPoint locationInView = [self convertPoint:[event locationInWindow]
+                fromView:nil];
 
-                      //mouse_right=1;
-											util_set_reset_mouse(UTIL_MOUSE_RIGHT_BUTTON,1);
+        //mouse_right=1;
+        util_set_reset_mouse(UTIL_MOUSE_RIGHT_BUTTON,1);
 
-			//0,0 en cocoa esta abajo a la izquierda
-                        int posx=locationInView.x;
-                        int posy=locationInView.y;
+        //0,0 en cocoa esta abajo a la izquierda
+        int posx=locationInView.x;
+        int posy=locationInView.y;
 
         [self leftrightmouseDown:posx y:posy];
 
@@ -887,39 +901,48 @@ int cocoa_raton_oculto=0;
 - (void)mouseMoved:(NSEvent *)event
 {
 
-NSPoint locationInView = [self convertPoint:[event locationInWindow]
+        NSPoint locationInView = [self convertPoint:[event locationInWindow]
                                        fromView:nil];
 
-			//0,0 en cocoa esta abajo a la izquierda
-                    mouse_x=locationInView.x;
-                    mouse_y=screen_get_window_size_height_zoom_border_en()-locationInView.y;
+        //0,0 en cocoa esta abajo a la izquierda
+        mouse_x=locationInView.x;
+        mouse_y=screen_get_window_size_height_zoom_border_en()-locationInView.y;
 
-                    kempston_mouse_x=mouse_x/zoom_x;
-                    kempston_mouse_y=255-mouse_y/zoom_y;
+        kempston_mouse_x=mouse_x/zoom_x;
+        kempston_mouse_y=255-mouse_y/zoom_y;
 
 		//si esta dentro de la ventana y hay que ocultar puntero
 
-   if (mouse_pointer_shown.v==0) {
-			if (mouse_x>=0 && mouse_y>=0 && mouse_x<=screen_get_window_size_width_zoom_border_en() && mouse_y<=screen_get_window_size_height_zoom_border_en() ) {
-				if (!cocoa_raton_oculto) {
-					debug_printf (VERBOSE_PARANOID,"Mouse inside window and not hidden. Hide it");
-					cocoa_raton_oculto=1;
-					[NSCursor hide];
-				}
-			}
+        if (mouse_pointer_shown.v==0) {
+                if (mouse_x>=0 && mouse_y>=0 && mouse_x<=screen_get_window_size_width_zoom_border_en() && mouse_y<=screen_get_window_size_height_zoom_border_en() ) {
+                        if (!cocoa_raton_oculto) {
+                                debug_printf (VERBOSE_PARANOID,"Mouse inside window and not hidden. Hide it");
+                                cocoa_raton_oculto=1;
+                                [NSCursor hide];
+                        }
+                }
 
-			else {
-				if (cocoa_raton_oculto) {
-					debug_printf (VERBOSE_PARANOID,"Mouse outside window and hidden. Unhide it");
-					cocoa_raton_oculto=0;
-					[NSCursor unhide];
-				}
-			}
+                else {
+                        if (cocoa_raton_oculto) {
+                                debug_printf (VERBOSE_PARANOID,"Mouse outside window and hidden. Unhide it");
+                                cocoa_raton_oculto=0;
+                                [NSCursor unhide];
+                        }
+                }
 
-	}
+        }
+
+        else {
+           //Si se tiene que mostrar, pero se habia ocultado y ahora se ha vuelto a habilitar el setting
+           if (cocoa_raton_oculto) {
+                debug_printf (VERBOSE_PARANOID,"Mouse was hidden and the setting is now enabled. Unhide it");
+		cocoa_raton_oculto=0;
+		[NSCursor unhide];                   
+           }
+        }
 
 
-                        //debug_printf (VERBOSE_PARANOID,"Mouse motion. X: %d Y:%d kempston x: %d y: %d",mouse_x,mouse_y,kempston_mouse_x,kempston_mouse_y);
+        //debug_printf (VERBOSE_PARANOID,"Mouse motion. X: %d Y:%d kempston x: %d y: %d",mouse_x,mouse_y,kempston_mouse_x,kempston_mouse_y);
 }
 
 - (BOOL)acceptsFirstResponder {
@@ -965,167 +988,6 @@ NSPoint locationInView = [self convertPoint:[event locationInWindow]
     return YES;
 }
 
-/*CGContextRef viewContextRef;
-CGImageRef imageRef;
-            CGImageRef clipImageRef;
-            CGRect clipRect;
-            const NSRect *rectList;*/
-
-
-
-//Prueba otra funcion redibujar ventana
-//Tambien falla. ademas a veces da segmentation fault al redimensionar ventana
-//Lo curioso es que cuando deja de redibujar la pantalla, se sigue llamando a aqui
-
-
-/*
-- (void) newdrawRect:(NSRect) rect
-						{
-
-
-						if (pendingresize) {
-										debug_printf (VERBOSE_DEBUG,"drawRect with pendingresize active");
-						return;
-						}
-
-if (dataProviderRef) {
-	//printf ("Redibujando\n");
-//http://stackoverflow.com/questions/4356441/mac-os-cocoa-draw-a-simple-pixel-on-a-canvas
-
-							// Create a CGImage with the pixel data
-	//CGDataProviderRef provider = CGDataProviderCreateWithData(NULL, dataProviderRef, dataLength, NULL);
-	CGColorSpaceRef colorspace = CGColorSpaceCreateDeviceRGB();
-	CGImageRef image = CGImageCreate(
-screen_get_window_size_width_zoom_border_en(),screen_get_window_size_height_zoom_border_en(),
-
-			screen.bitsPerComponent,
-			screen.bitsPerPixel,
-
-
-			(screen_get_window_size_width_zoom_border_en() * (screen.bitsPerComponent/2)), //bytesPerRow
-
-			CGColorSpaceCreateWithName(kCGColorSpaceGenericRGB), //colorspace for OS X >= 10.4
-			kCGBitmapByteOrder32Little | kCGImageAlphaNoneSkipFirst,
-			dataProviderRef, //provider
-			NULL, //decode
-			0, //interpolate
-			kCGRenderingIntentDefault //intent
-	);
-
-
-	CGContextRef ctx = [[NSGraphicsContext currentContext] graphicsPort];
-
-	CGContextDrawImage(ctx,
-			CGRectMake(0.0, 0.0, screen_get_window_size_width_zoom_border_en(),screen_get_window_size_height_zoom_border_en()),
-			image);
-
-	//Clean up
-	CGColorSpaceRelease(colorspace);
-	CGImageRelease (image);
-	//CGDataProviderRelease(provider);
-						}
-
-}
-
-*/
-
-//Redibujar ventana. No usado en OpenGL
-- (void) drawRect:(NSRect) rect
-{
-
-#ifdef COCOA_OPENGL
-	return;
-#endif
-
-	//printf ("refresca\n");
-
-        if (pendingresize) {
-                //debug_printf (VERBOSE_DEBUG,"drawRect with pendingresize active");
-		return;
-        }
-
-
-				CGContextRef viewContextRef;
-				CGImageRef imageRef;
-				CGImageRef clipImageRef;
-				CGRect clipRect;
-				const NSRect *rectList;
-
-
-
-    // get CoreGraphic context
-    viewContextRef = [[NSGraphicsContext currentContext] graphicsPort];
-    CGContextSetInterpolationQuality (viewContextRef, kCGInterpolationNone);
-    CGContextSetShouldAntialias (viewContextRef, NO);
-
-    // draw screen bitmap directly to Core Graphics context
-    if (dataProviderRef) {
-
-        imageRef = CGImageCreate(
-		screen_get_window_size_width_zoom_border_en(),screen_get_window_size_height_zoom_border_en(),
-
-            screen.bitsPerComponent,
-            screen.bitsPerPixel,
-
-
-            (screen_get_window_size_width_zoom_border_en() * (screen.bitsPerComponent/2)), //bytesPerRow
-
-            CGColorSpaceCreateWithName(kCGColorSpaceGenericRGB), //colorspace for OS X >= 10.4
-            kCGBitmapByteOrder32Little | kCGImageAlphaNoneSkipFirst,
-            dataProviderRef, //provider
-            NULL, //decode
-            0, //interpolate
-            kCGRenderingIntentDefault //intent
-        );
-// test if host supports "CGImageCreateWithImageInRect" at compile time
-#if (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_4)
-	if (&CGImageCreateWithImageInRect == NULL) { // test if "CGImageCreateWithImageInRect" is supported on host at runtime
-#endif
-
-
-            // compatibility drawing code (draws everything) (OS X < 10.4)
-      	      CGContextDrawImage (viewContextRef, CGRectMake(0, 0, [self bounds].size.width, [self bounds].size.height), imageRef);
-
-#if (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_4)
-        }
-
-	else {
-            // selective drawing code (draws only dirty rectangles) (OS X >= 10.4)
-		#if (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
-        	    NSInteger rectCount;
-		#else
-	            int rectCount;
-		#endif
-	            int i;
-
-
-        	    [self getRectsBeingDrawn:&rectList count:&rectCount];
-
-			//printf ("rectCount: %d\n",rectCount);
-
-			//Parece ser que cocoa automaticamente escala el contenido a tamaño de ventana, distorsionando. Porque?
-
-			clipRect.origin.x=0;
-			clipRect.origin.y=0;
-			clipRect.size.width=screen_get_window_size_width_zoom_border_en();
-			clipRect.size.height=screen_get_window_size_height_zoom_border_en();
-
-			//printf ("dibujar x: %f y: %f w: %f h: %f\n",clipRect.origin.x,clipRect.origin.y,clipRect.size.width,clipRect.size.height);
-			//printf ("contentAspectRatio: %f x %f\n",normalWindow.contentAspectRatio.width,normalWindow.contentAspectRatio.height);
-
-			clipImageRef = CGImageCreateWithImageInRect(
-                            imageRef,
-                            clipRect
-                        );
-                        CGContextDrawImage (viewContextRef, cgrect(rectList[0]), clipImageRef);
-                        CGImageRelease (clipImageRef);
-												//CFRelease (clipImageRef);
-        }
-#endif
-        CGImageRelease (imageRef);
-				//CFRelease (imageRef);
-    }
-}
 
 
 - (void) setContentDimensions
@@ -1164,14 +1026,15 @@ screen_get_window_size_width_zoom_border_en(),screen_get_window_size_height_zoom
         cx = (anchopantalla - cw) / 2.0;
         cy = (altopantalla - ch) / 2.0;
 
-    } else {
-        cx = 0;
-        cy = 0;
-        cw = screen.width;
-        ch = screen.height;
-        cdx = 1.0;
-        cdy = 1.0;
-    }
+        } 
+        else {
+                cx = 0;
+                cy = 0;
+                cw = screen.width;
+                ch = screen.height;
+                cdx = 1.0;
+                cdy = 1.0;
+        }
 
 }
 
@@ -1186,34 +1049,58 @@ screen_get_window_size_width_zoom_border_en(),screen_get_window_size_height_zoom
 {
 	debug_printf (VERBOSE_INFO,"resizeContentToWidth %d X %d",w,h);
 
-    // update screenBuffer
-    if (dataProviderRef)
-        CGDataProviderRelease(dataProviderRef);
+        int timeout=100;
+
+        if (sem_screen_refresh_reallocate_layers) {
+                debug_printf (VERBOSE_DEBUG,"About to run resizeContentToWidth in the middle of a screen refresh. Wait until finish refreshing");
+        }
+
+        while (sem_screen_refresh_reallocate_layers && timeout) {
+                //printf ("Se va a hacer resizeContentToWidth en medio de refresco. Esperar\n");
+
+                //esto parece que solo sucede al inicio del programa? y solo en Cocoa?
+                //este tipo de cosas parece que solo sucede en cocoa pues el driver de video va con un thread aparte a su bola
+                //cuando genera error aqui entra por un resize de un evento "automatico" de cocoa
+                //esto es independiente de ZX Desktop, ya este habilitado o no, puede suceder esto
+                //si no controlase esto, acaba generando segmentation fault (pero parece que el segmentation fault solo cuando esta habilitado ZX Desktop)
+
+                usleep(10000); //0.01 segundo
+
+                timeout--;
+        }
+
+        //Si ha saltado el timeout despues de 100 intentos (100*0.01=1 segundo) y sigue reallocating, que pase lo que pase, pero que salga de ahi
+
+        scr_reallocate_layers_menu(w,h);      
+
+        // update screenBuffer
+        if (dataProviderRef) CGDataProviderRelease(dataProviderRef);
+
 
     //sync host window color space with guests
 	screen.bitsPerPixel = 32;
 	screen.bitsPerComponent = 4 * 2;
 
-    dataProviderRef = CGDataProviderCreateWithData(NULL, pixel_screen_data, w * 4 * h, NULL);
+        dataProviderRef = CGDataProviderCreateWithData(NULL, pixel_screen_data, w * 4 * h, NULL);
 
 
-    // update windows
-    if (ventana_fullscreen) {
-        [[fullScreenWindow contentView] setFrame:[[NSScreen mainScreen] frame]];
+        // update windows
+        if (ventana_fullscreen) {
+                [[fullScreenWindow contentView] setFrame:[[NSScreen mainScreen] frame]];
 
-        [normalWindow setFrame:NSMakeRect([normalWindow frame].origin.x, [normalWindow frame].origin.y - h + screen.height, w, h + [normalWindow frame].size.height - screen.height) display:NO animate:NO];
-    } else {
+                [normalWindow setFrame:NSMakeRect([normalWindow frame].origin.x, [normalWindow frame].origin.y - h + screen.height, w, h + [normalWindow frame].size.height - screen.height) display:NO animate:NO];
+        } else {
 
-        [normalWindow setFrame:NSMakeRect([normalWindow frame].origin.x, [normalWindow frame].origin.y - h + screen.height, w, h + [normalWindow frame].size.height - screen.height) display:YES animate:NO];
-    }
+                [normalWindow setFrame:NSMakeRect([normalWindow frame].origin.x, [normalWindow frame].origin.y - h + screen.height, w, h + [normalWindow frame].size.height - screen.height) display:YES animate:NO];
+        }
 
 
-    screen.width = w;
-    screen.height = h;
-	[normalWindow center];
-    [self setContentDimensions];
+        screen.width = w;
+        screen.height = h;
+        [normalWindow center];
+        [self setContentDimensions];
 
-   [self setFrame:NSMakeRect(cx, cy, cw, ch)];
+        [self setFrame:NSMakeRect(cx, cy, cw, ch)];
 
 	//printf ("crear ventana de %f X %f \n",cw,ch);
 	clear_putpixel_cache();
@@ -1223,9 +1110,11 @@ screen_get_window_size_width_zoom_border_en(),screen_get_window_size_height_zoom
 	//indique cuando hay que llamar a screen_z88_draw_lower_screen
 	pendiente_z88_draw_lower=1;
 
-#ifdef COCOA_OPENGL
+
 	[self createTexture];
-#endif
+
+
+
 }
 
 
@@ -1309,7 +1198,7 @@ screen_get_window_size_width_zoom_border_en(),screen_get_window_size_height_zoom
     }
 }
 
-int temp_cocoa_contador=0;
+
 
 
 //Teclas de Z88 asociadas a cada tecla del teclado fisico
@@ -1369,33 +1258,33 @@ int scrcocoa_keymap_z88_cpc_leftz; //Tecla a la izquierda de la Z. Solo usada en
 	//Teclas que necesitan conversion de teclado para Chloe
 	int tecla_gestionada_chloe=0;
         if (MACHINE_IS_SPECTRUM && chloe_keyboard.v) {
-			tecla_gestionada_chloe=1;
+                tecla_gestionada_chloe=1;
 
-                        if (teclareal==scrcocoa_keymap_z88_cpc_minus) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_MINUS,pressrelease);
+                if (teclareal==scrcocoa_keymap_z88_cpc_minus) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_MINUS,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_equal) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_EQUAL,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_equal) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_EQUAL,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_backslash) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_BACKSLASH,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_backslash) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_BACKSLASH,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_bracket_left) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_BRACKET_LEFT,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_bracket_left) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_BRACKET_LEFT,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_bracket_right) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_BRACKET_RIGHT,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_bracket_right) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_BRACKET_RIGHT,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_semicolon) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_SEMICOLON,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_semicolon) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_SEMICOLON,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_apostrophe) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_APOSTROPHE,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_apostrophe) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_APOSTROPHE,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_pound) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_POUND,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_pound) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_POUND,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_comma) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_COMMA,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_comma) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_COMMA,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_period) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_PERIOD,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_period) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_PERIOD,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_slash) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_SLASH,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_slash) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_SLASH,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_leftz) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_LEFTZ,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_leftz) util_set_reset_key_chloe_keymap(UTIL_KEY_CHLOE_LEFTZ,pressrelease);
 
-			else tecla_gestionada_chloe=0;
+                else tecla_gestionada_chloe=0;
         }
 
 
@@ -1407,27 +1296,27 @@ int scrcocoa_keymap_z88_cpc_leftz; //Tecla a la izquierda de la Z. Solo usada en
 	if (MACHINE_IS_SAM || MACHINE_IS_QL) {
 		tecla_gestionada_sam_ql=1;
 
-                        if (teclareal==scrcocoa_keymap_z88_cpc_minus) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_MINUS,pressrelease);
+                if (teclareal==scrcocoa_keymap_z88_cpc_minus) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_MINUS,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_equal) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_EQUAL,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_equal) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_EQUAL,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_backslash) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_BACKSLASH,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_backslash) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_BACKSLASH,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_bracket_left) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_BRACKET_LEFT,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_bracket_left) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_BRACKET_LEFT,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_bracket_right) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_BRACKET_RIGHT,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_bracket_right) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_BRACKET_RIGHT,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_semicolon) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_SEMICOLON,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_semicolon) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_SEMICOLON,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_apostrophe) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_APOSTROPHE,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_apostrophe) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_APOSTROPHE,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_pound) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_POUND,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_pound) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_POUND,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_comma) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_COMMA,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_comma) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_COMMA,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_period) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_PERIOD,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_period) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_PERIOD,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_slash) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_SLASH,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_slash) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_SLASH,pressrelease);
 
 
 		else tecla_gestionada_sam_ql=0;
@@ -1448,279 +1337,281 @@ int scrcocoa_keymap_z88_cpc_leftz; //Tecla a la izquierda de la Z. Solo usada en
                         util_set_reset_key(UTIL_KEY_ENTER,pressrelease);
                break;
 
-                        case COCOA_KEY_DOWN:
-                                util_set_reset_key(UTIL_KEY_DOWN,pressrelease);
-                        break;
+                case COCOA_KEY_DOWN:
+                        util_set_reset_key(UTIL_KEY_DOWN,pressrelease);
+                break;
 
-                        case COCOA_KEY_UP:
-                                util_set_reset_key(UTIL_KEY_UP,pressrelease);
-                        break;
+                case COCOA_KEY_UP:
+                        util_set_reset_key(UTIL_KEY_UP,pressrelease);
+                break;
 
-                    case COCOA_KEY_LEFT:
-                                util_set_reset_key(UTIL_KEY_LEFT,pressrelease);
-                        break;
+                case COCOA_KEY_LEFT:
+                        util_set_reset_key(UTIL_KEY_LEFT,pressrelease);
+                break;
 
-                        case COCOA_KEY_RIGHT:
-                                util_set_reset_key(UTIL_KEY_RIGHT,pressrelease);
-                        break;
+                case COCOA_KEY_RIGHT:
+                        util_set_reset_key(UTIL_KEY_RIGHT,pressrelease);
+                break;
 
+                case COCOA_KEY_HOME:
+                        util_set_reset_key(UTIL_KEY_HOME,pressrelease);
+                break;                        
 
-                        case ' ':
-				util_set_reset_key(UTIL_KEY_SPACE,pressrelease);
-                        break;
 
-			// Estos de shift , alt y control no se leen por aqui en teoria
-                        case COCOA_KEY_LSHIFT:
-				util_set_reset_key(UTIL_KEY_SHIFT_L,pressrelease);
-                        break;
+                case ' ':
+                        util_set_reset_key(UTIL_KEY_SPACE,pressrelease);
+                break;
 
-                        case COCOA_KEY_RSHIFT:
-				util_set_reset_key(UTIL_KEY_SHIFT_R,pressrelease);
-                        break;
+                // Estos de shift , alt y control no se leen por aqui en teoria
+                case COCOA_KEY_LSHIFT:
+                        util_set_reset_key(UTIL_KEY_SHIFT_L,pressrelease);
+                break;
 
-                        case COCOA_KEY_LALT:
-                                util_set_reset_key(UTIL_KEY_ALT_L,pressrelease);
-                        break;
+                case COCOA_KEY_RSHIFT:
+                        util_set_reset_key(UTIL_KEY_SHIFT_R,pressrelease);
+                break;
 
-                        case COCOA_KEY_RALT:
-                                util_set_reset_key(UTIL_KEY_ALT_R,pressrelease);
-                        break;
+                case COCOA_KEY_LALT:
+                        util_set_reset_key(UTIL_KEY_ALT_L,pressrelease);
+                break;
 
-                        case COCOA_KEY_LCTRL:
-				util_set_reset_key(UTIL_KEY_CONTROL_L,pressrelease);
-                        break;
+                case COCOA_KEY_RALT:
+                        util_set_reset_key(UTIL_KEY_ALT_R,pressrelease);
+                break;
 
-                        case COCOA_KEY_RCTRL:
-				util_set_reset_key(UTIL_KEY_CONTROL_R,pressrelease);
-                        break;
+                case COCOA_KEY_LCTRL:
+                        util_set_reset_key(UTIL_KEY_CONTROL_L,pressrelease);
+                break;
 
+                case COCOA_KEY_RCTRL:
+                        util_set_reset_key(UTIL_KEY_CONTROL_R,pressrelease);
+                break;
 
-                        //Teclas que generan doble pulsacion
-                        case COCOA_KEY_BACKSPACE:
-				util_set_reset_key(UTIL_KEY_BACKSPACE,pressrelease);
-                        break;
 
+                //Teclas que generan doble pulsacion
+                case COCOA_KEY_BACKSPACE:
+                        util_set_reset_key(UTIL_KEY_BACKSPACE,pressrelease);
+                break;
 
 
-                        case COCOA_KEY_HOME:
-				util_set_reset_key(UTIL_KEY_HOME,pressrelease);
-                        break;
 
-			/* Estos parece que no existen en mac
-                        case COCOA_KEY_KP_Left:
-				util_set_reset_key(UTIL_KEY_LEFT,pressrelease);
-                        break;
 
-                        case COCOA_KEY_KP_Right:
-				util_set_reset_key(UTIL_KEY_RIGHT,pressrelease);
-                        break;
 
+                /* Estos parece que no existen en mac
+                case COCOA_KEY_KP_Left:
+                        util_set_reset_key(UTIL_KEY_LEFT,pressrelease);
+                break;
 
-                        case COCOA_KEY_KP_Down:
-				util_set_reset_key(UTIL_KEY_DOWN,pressrelease);
-                        break;
+                case COCOA_KEY_KP_Right:
+                        util_set_reset_key(UTIL_KEY_RIGHT,pressrelease);
+                break;
 
-                        case COCOA_KEY_KP_Up:
-				util_set_reset_key(UTIL_KEY_UP,pressrelease);
-                        break;
 
-			*/
+                case COCOA_KEY_KP_Down:
+                        util_set_reset_key(UTIL_KEY_DOWN,pressrelease);
+                break;
 
-                        case ',':
-				util_set_reset_key(',',pressrelease);
-                        break;
+                case COCOA_KEY_KP_Up:
+                        util_set_reset_key(UTIL_KEY_UP,pressrelease);
+                break;
 
-                        case '.':
-				util_set_reset_key('.',pressrelease);
-                        break;
+                */
 
-                        case '<':
-                        util_set_reset_key('<',pressrelease);
-                        break;
+                case ',':
+                        util_set_reset_key(',',pressrelease);
+                break;
 
-                        case '>':
-                        util_set_reset_key('>',pressrelease);
-                        break;
+                case '.':
+                        util_set_reset_key('.',pressrelease);
+                break;
 
-                        case COCOA_KEY_TAB:
-				util_set_reset_key(UTIL_KEY_TAB,pressrelease);
-                        break;
+                case '<':
+                util_set_reset_key('<',pressrelease);
+                break;
 
-                        case COCOA_KEY_CAPSLOCK:
-				util_set_reset_key(UTIL_KEY_CAPS_LOCK,pressrelease);
-                        break;
+                case '>':
+                util_set_reset_key('>',pressrelease);
+                break;
 
+                case COCOA_KEY_TAB:
+                        util_set_reset_key(UTIL_KEY_TAB,pressrelease);
+                break;
 
+                case COCOA_KEY_CAPSLOCK:
+                        util_set_reset_key(UTIL_KEY_CAPS_LOCK,pressrelease);
+                break;
 
-                        case COCOA_KEY_KP_MINUS:
-				util_set_reset_key(UTIL_KEY_MINUS,pressrelease);
-                        break;
 
-                        case COCOA_KEY_KP_PLUS:
-				util_set_reset_key(UTIL_KEY_PLUS,pressrelease);
-                        break;
 
-                        case COCOA_KEY_KP_DIVIDE:
-				util_set_reset_key(UTIL_KEY_SLASH,pressrelease);
-                        break;
+                case COCOA_KEY_KP_MINUS:
+                        util_set_reset_key(UTIL_KEY_MINUS,pressrelease);
+                break;
 
-                        case COCOA_KEY_KP_MULTIPLY:
-				util_set_reset_key(UTIL_KEY_ASTERISK,pressrelease);
-                        break;
+                case COCOA_KEY_KP_PLUS:
+                        util_set_reset_key(UTIL_KEY_PLUS,pressrelease);
+                break;
 
+                case COCOA_KEY_KP_DIVIDE:
+                        util_set_reset_key(UTIL_KEY_SLASH,pressrelease);
+                break;
 
-                        //F1 pulsado
-                        case COCOA_KEY_F1:
-				util_set_reset_key(UTIL_KEY_F1,pressrelease);
-                        break;
+                case COCOA_KEY_KP_MULTIPLY:
+                        util_set_reset_key(UTIL_KEY_ASTERISK,pressrelease);
+                break;
 
-                        //F2 pulsado
-                        case COCOA_KEY_F2:
-                                util_set_reset_key(UTIL_KEY_F2,pressrelease);
-                        break;
 
-                        //F3 pulsado
-                        case COCOA_KEY_F3:
-                                util_set_reset_key(UTIL_KEY_F3,pressrelease);
-                        break;
+                //F1 pulsado
+                case COCOA_KEY_F1:
+                        util_set_reset_key(UTIL_KEY_F1,pressrelease);
+                break;
 
-                        //F4 pulsado
-                        case COCOA_KEY_F4:
-                                util_set_reset_key(UTIL_KEY_F4,pressrelease);
-                        break;
+                //F2 pulsado
+                case COCOA_KEY_F2:
+                        util_set_reset_key(UTIL_KEY_F2,pressrelease);
+                break;
 
-			//F5 pulsado
-			case COCOA_KEY_F5:
-				util_set_reset_key(UTIL_KEY_F5,pressrelease);
-                        break;
+                //F3 pulsado
+                case COCOA_KEY_F3:
+                        util_set_reset_key(UTIL_KEY_F3,pressrelease);
+                break;
 
+                //F4 pulsado
+                case COCOA_KEY_F4:
+                        util_set_reset_key(UTIL_KEY_F4,pressrelease);
+                break;
 
-												//F6 pulsado
-                        case COCOA_KEY_F6:
-                                util_set_reset_key(UTIL_KEY_F6,pressrelease);
-                        break;
+                //F5 pulsado
+                case COCOA_KEY_F5:
+                        util_set_reset_key(UTIL_KEY_F5,pressrelease);
+                break;
 
-												//F7 pulsado
-                        case COCOA_KEY_F7:
-                                util_set_reset_key(UTIL_KEY_F7,pressrelease);
-                        break;
 
+                //F6 pulsado
+                case COCOA_KEY_F6:
+                        util_set_reset_key(UTIL_KEY_F6,pressrelease);
+                break;
 
-                        //F8 pulsado. osdkeyboard
-                        case COCOA_KEY_F8:
-                                util_set_reset_key(UTIL_KEY_F8,pressrelease);
-                        break;
+                //F7 pulsado
+                case COCOA_KEY_F7:
+                        util_set_reset_key(UTIL_KEY_F7,pressrelease);
+                break;
 
 
-                        //F9 pulsado. smartload
-                        case COCOA_KEY_F9:
-                                util_set_reset_key(UTIL_KEY_F9,pressrelease);
-                        break;
+                //F8 pulsado. osdkeyboard
+                case COCOA_KEY_F8:
+                        util_set_reset_key(UTIL_KEY_F8,pressrelease);
+                break;
 
-                        //F10 pulsado
-                        case COCOA_KEY_F10:
-                                util_set_reset_key(UTIL_KEY_F10,pressrelease);
-                        break;
 
-												//F11 pulsado
-                        case COCOA_KEY_F11:
-                                util_set_reset_key(UTIL_KEY_F11,pressrelease);
-                        break;
+                //F9 pulsado. smartload
+                case COCOA_KEY_F9:
+                        util_set_reset_key(UTIL_KEY_F9,pressrelease);
+                break;
 
-												//F12 pulsado
-                        case COCOA_KEY_F12:
-                                util_set_reset_key(UTIL_KEY_F12,pressrelease);
-                        break;
+                //F10 pulsado
+                case COCOA_KEY_F10:
+                        util_set_reset_key(UTIL_KEY_F10,pressrelease);
+                break;
 
-												//F13 pulsado
-                        case COCOA_KEY_F13:
-                                util_set_reset_key(UTIL_KEY_F13,pressrelease);
-                        break;
+                //F11 pulsado
+                case COCOA_KEY_F11:
+                        util_set_reset_key(UTIL_KEY_F11,pressrelease);
+                break;
 
-												//F14 pulsado
-                        case COCOA_KEY_F14:
-                                util_set_reset_key(UTIL_KEY_F14,pressrelease);
-                        break;
+                //F12 pulsado
+                case COCOA_KEY_F12:
+                        util_set_reset_key(UTIL_KEY_F12,pressrelease);
+                break;
 
-												//F15 pulsado
-                        case COCOA_KEY_F15:
-                                util_set_reset_key(UTIL_KEY_F15,pressrelease);
-                        break;
+                //F13 pulsado
+                case COCOA_KEY_F13:
+                        util_set_reset_key(UTIL_KEY_F13,pressrelease);
+                break;
 
+                //F14 pulsado
+                case COCOA_KEY_F14:
+                        util_set_reset_key(UTIL_KEY_F14,pressrelease);
+                break;
 
-                        //PgUp
-                        case COCOA_KEY_PAGEUP:
-				util_set_reset_key(UTIL_KEY_PAGE_UP,pressrelease);
-                        break;
+                //F15 pulsado
+                case COCOA_KEY_F15:
+                        util_set_reset_key(UTIL_KEY_F15,pressrelease);
+                break;
 
 
-                        //PgDn
-                        case COCOA_KEY_PAGEDOWN:
-				util_set_reset_key(UTIL_KEY_PAGE_DOWN,pressrelease);
-                        break;
+                //PgUp
+                case COCOA_KEY_PAGEUP:
+                        util_set_reset_key(UTIL_KEY_PAGE_UP,pressrelease);
+                break;
 
 
-			//Teclas del keypad
-			case COCOA_KEY_KP0:
-				util_set_reset_key(UTIL_KEY_KP0,pressrelease);
-			break;
+                //PgDn
+                case COCOA_KEY_PAGEDOWN:
+                        util_set_reset_key(UTIL_KEY_PAGE_DOWN,pressrelease);
+                break;
 
-			case COCOA_KEY_KP1:
-				util_set_reset_key(UTIL_KEY_KP1,pressrelease);
-			break;
 
-			case COCOA_KEY_KP2:
-				util_set_reset_key(UTIL_KEY_KP2,pressrelease);
-			break;
+                //Teclas del keypad
+                case COCOA_KEY_KP0:
+                        util_set_reset_key(UTIL_KEY_KP0,pressrelease);
+                break;
 
-			case COCOA_KEY_KP3:
-				util_set_reset_key(UTIL_KEY_KP3,pressrelease);
-			break;
+                case COCOA_KEY_KP1:
+                        util_set_reset_key(UTIL_KEY_KP1,pressrelease);
+                break;
 
-			case COCOA_KEY_KP4:
-				util_set_reset_key(UTIL_KEY_KP4,pressrelease);
-			break;
+                case COCOA_KEY_KP2:
+                        util_set_reset_key(UTIL_KEY_KP2,pressrelease);
+                break;
 
-			case COCOA_KEY_KP5:
-				util_set_reset_key(UTIL_KEY_KP5,pressrelease);
-			break;
+                case COCOA_KEY_KP3:
+                        util_set_reset_key(UTIL_KEY_KP3,pressrelease);
+                break;
 
-			case COCOA_KEY_KP6:
-				util_set_reset_key(UTIL_KEY_KP6,pressrelease);
-			break;
+                case COCOA_KEY_KP4:
+                        util_set_reset_key(UTIL_KEY_KP4,pressrelease);
+                break;
 
-			case COCOA_KEY_KP7:
-				util_set_reset_key(UTIL_KEY_KP7,pressrelease);
-			break;
+                case COCOA_KEY_KP5:
+                        util_set_reset_key(UTIL_KEY_KP5,pressrelease);
+                break;
 
-			case COCOA_KEY_KP8:
-				util_set_reset_key(UTIL_KEY_KP8,pressrelease);
-			break;
+                case COCOA_KEY_KP6:
+                        util_set_reset_key(UTIL_KEY_KP6,pressrelease);
+                break;
 
-			case COCOA_KEY_KP9:
-				util_set_reset_key(UTIL_KEY_KP9,pressrelease);
-			break;
+                case COCOA_KEY_KP7:
+                        util_set_reset_key(UTIL_KEY_KP7,pressrelease);
+                break;
 
-			case COCOA_KEY_KP_COMMA:
-				util_set_reset_key(UTIL_KEY_KP_COMMA,pressrelease);
-			break;
+                case COCOA_KEY_KP8:
+                        util_set_reset_key(UTIL_KEY_KP8,pressrelease);
+                break;
 
-			case COCOA_KEY_KP_ENTER:
-				util_set_reset_key(UTIL_KEY_KP_ENTER,pressrelease);
-                        break;
+                case COCOA_KEY_KP9:
+                        util_set_reset_key(UTIL_KEY_KP9,pressrelease);
+                break;
 
+                case COCOA_KEY_KP_COMMA:
+                        util_set_reset_key(UTIL_KEY_KP_COMMA,pressrelease);
+                break;
 
+                case COCOA_KEY_KP_ENTER:
+                        util_set_reset_key(UTIL_KEY_KP_ENTER,pressrelease);
+                break;
 
-                       default:
 
-                                //tecla ordinaria
-                                //printf (" parseada: %u '%c' \n",teclareal, ( teclareal>31 && teclareal<128 ? teclareal : '.' ) );
 
-                                if (teclareal<256) {
-					util_set_reset_key(teclareal,pressrelease);
-					//convert_numeros_letras_puerto_teclado(teclareal,pressrelease);
-				}
-                        break;
+                default:
+
+                        //tecla ordinaria
+                        //printf (" parseada: %u '%c' \n",teclareal, ( teclareal>31 && teclareal<128 ? teclareal : '.' ) );
+
+                        if (teclareal<256) {
+                                util_set_reset_key(teclareal,pressrelease);
+                                //convert_numeros_letras_puerto_teclado(teclareal,pressrelease);
+                        }
+                break;
 
 
         }
@@ -1731,29 +1622,29 @@ int scrcocoa_keymap_z88_cpc_leftz; //Tecla a la izquierda de la Z. Solo usada en
 	//Teclas que necesitan conversion de teclado para CPC
 	if (MACHINE_IS_CPC) {
 
-                        if (teclareal==scrcocoa_keymap_z88_cpc_minus) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_MINUS,pressrelease);
+                if (teclareal==scrcocoa_keymap_z88_cpc_minus) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_MINUS,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_circunflejo) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_CIRCUNFLEJO,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_circunflejo) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_CIRCUNFLEJO,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_arroba) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_ARROBA,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_arroba) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_ARROBA,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_bracket_left) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_BRACKET_LEFT,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_bracket_left) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_BRACKET_LEFT,pressrelease);
 
 
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_colon) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_COLON,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_colon) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_COLON,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_semicolon) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_SEMICOLON,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_semicolon) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_SEMICOLON,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_bracket_right) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_BRACKET_RIGHT,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_bracket_right) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_BRACKET_RIGHT,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_comma) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_COMMA,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_comma) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_COMMA,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_period) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_PERIOD,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_period) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_PERIOD,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_slash) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_SLASH,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_slash) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_SLASH,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_backslash) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_BACKSLASH,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_backslash) util_set_reset_key_cpc_keymap(UTIL_KEY_CPC_BACKSLASH,pressrelease);
 
 
 	}
@@ -1762,30 +1653,27 @@ int scrcocoa_keymap_z88_cpc_leftz; //Tecla a la izquierda de la Z. Solo usada en
         //Teclas que necesitan conversion de teclado para Z88
         if (!MACHINE_IS_Z88) return;
 
-                        if (teclareal==scrcocoa_keymap_z88_cpc_minus) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_MINUS,pressrelease);
+                if (teclareal==scrcocoa_keymap_z88_cpc_minus) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_MINUS,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_equal) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_EQUAL,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_equal) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_EQUAL,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_backslash) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_BACKSLASH,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_backslash) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_BACKSLASH,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_bracket_left) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_BRACKET_LEFT,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_bracket_left) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_BRACKET_LEFT,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_bracket_right) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_BRACKET_RIGHT,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_bracket_right) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_BRACKET_RIGHT,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_semicolon) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_SEMICOLON,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_semicolon) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_SEMICOLON,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_apostrophe) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_APOSTROPHE,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_apostrophe) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_APOSTROPHE,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_pound) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_POUND,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_pound) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_POUND,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_comma) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_COMMA,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_comma) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_COMMA,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_period) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_PERIOD,pressrelease);
+                else if (teclareal==scrcocoa_keymap_z88_cpc_period) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_PERIOD,pressrelease);
 
-                        else if (teclareal==scrcocoa_keymap_z88_cpc_slash) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_SLASH,pressrelease);
-
-
-
+                else if (teclareal==scrcocoa_keymap_z88_cpc_slash) util_set_reset_key_z88_keymap(UTIL_KEY_Z88_SLASH,pressrelease);
 
 
 
@@ -1799,12 +1687,12 @@ int scrcocoa_antespulsadoctrl=0,scrcocoa_antespulsadoalt=0,scrcocoa_antespulsado
         //printf ("\nmigestionEvento\n");
 
 
-	//asumimos teclas de control no pulsadas
-	int pulsadoctrl,pulsadoalt,pulsadoshift_l,pulsadoshift_r,pulsadocmd; //,pulsadocapslock;
-		pulsadoctrl=pulsadoalt=pulsadoshift_l=pulsadoshift_r=pulsadocmd=0;
+        //asumimos teclas de control no pulsadas
+        int pulsadoctrl,pulsadoalt,pulsadoshift_l,pulsadoshift_r,pulsadocmd; //,pulsadocapslock;
+        pulsadoctrl=pulsadoalt=pulsadoshift_l=pulsadoshift_r=pulsadocmd=0;
 
-    int event_keycode,event_type,event_modifier_flags;
-    NSPoint p = [event locationInWindow];
+        int event_keycode,event_type,event_modifier_flags;
+        NSPoint p = [event locationInWindow];
 
 	event_type=[event type];
 	event_keycode=[event keyCode];
@@ -2064,10 +1952,10 @@ int scrcocoa_antespulsadoctrl=0,scrcocoa_antespulsadoalt=0,scrcocoa_antespulsado
 
 /*- (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender
 {
-	printf ("adios\n");
 	end_emulator();
 	return NSTerminateCancel;
 }*/
+
 
 - (void)startEmulationWithArgc:(int)argc argv:(char**)argv
 {
@@ -2079,6 +1967,7 @@ int scrcocoa_antespulsadoctrl=0,scrcocoa_antespulsadoalt=0,scrcocoa_antespulsado
    //porque hay un exit aqui?? quiza del main de zesarux no se deba volver nunca, dejar el bucle como pthread y listo
    // exit(status);
 }
+
 
 - (void)openPanelDidEnd:(NSOpenPanel *)sheet returnCode:(int)returnCode contextInfo:(void *)contextInfo
 {
@@ -2110,7 +1999,7 @@ int scrcocoa_antespulsadoctrl=0,scrcocoa_antespulsadoalt=0,scrcocoa_antespulsado
 - (void) openzesaruxmenu:(id)sender
 {
         //printf ("open zesarux menu\n");
-        menu_abierto=1;
+        menu_fire_event_open_menu();
 }
 
 - (void) setzoomone:(id)sender
@@ -2162,36 +2051,36 @@ int main (int argc, const char * argv[]) {
 
 	// Si se especifica un video driver diferente de cocoa, no inicializar GUI
 
-		if (scrcocoa_non_cocoa_driver_set_cmd(argc,argv) ) {
-			//Y de aqui no salimos
-			printf ("Running ZEsarUX in non GUI mode because a non cocoa video driver is selected\n\n");
+        if (scrcocoa_non_cocoa_driver_set_cmd(argc,argv) ) {
+                //Y de aqui no salimos
+                printf ("Running ZEsarUX in non GUI mode because a non cocoa video driver is selected\n\n");
 
 
-			zesarux_main(gArgc, gArgv);
+                zesarux_main(gArgc, gArgv);
 
 
-			//Bucle cerrado con sleep. El bucle main se ha lanzado como thread
-			while (1) {
-				timer_sleep(1000);
-				//printf ("bucle con sleep\n");
-			}
+                //Bucle cerrado con sleep. El bucle main se ha lanzado como thread
+                while (1) {
+                        timer_sleep(1000);
+                        //printf ("bucle con sleep\n");
+                }
 
-		}
+        }
 
 
 
 
 	CPSProcessSerNum PSN;
 
-    NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
-    [NSApplication sharedApplication];
+        NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
+        [NSApplication sharedApplication];
 //	NSApplication *application = [NSApplication sharedApplication];
 
 // de qemu
-    if (!CPSGetCurrentProcess(&PSN))
-        if (!CPSEnableForegroundOperation(&PSN,0x03,0x3C,0x2C,0x1103))
-            if (!CPSSetFrontProcess(&PSN))
-                [NSApplication sharedApplication];
+        if (!CPSGetCurrentProcess(&PSN))
+                if (!CPSEnableForegroundOperation(&PSN,0x03,0x3C,0x2C,0x1103))
+                        if (!CPSSetFrontProcess(&PSN))
+                        [NSApplication sharedApplication];
 
 //de ejemplos
 /*
@@ -2296,53 +2185,83 @@ if (!GetCurrentProcess(&psn))
 #pragma mark zesarux
 
 
+	
 
-void scrcocoa_putpixel(int x,int y,unsigned int color)
+//Funcion de poner pixel en pantalla de driver, teniendo como entrada el color en RGB
+void scrcocoa_putpixel_final_rgb(int x,int y,unsigned int color_rgb)
+{
+
+
+        int index = 4*(x+y*pixel_screen_width);
+        unsigned int *p;
+        p=(unsigned int *) &pixel_screen_data[index];
+
+        //agregar alpha
+        color_rgb |=0xFF000000;  
+        //Escribir de golpe los 32 bits                 
+        *p=color_rgb;
+}
+
+//Funcion de poner pixel en pantalla de driver, teniendo como entrada el color indexado de tabla de colores
+void scrcocoa_putpixel_final(int x,int y,unsigned int color)
 {
 
 	if (pendingresize) {
 		//debug_printf (VERBOSE_DEBUG,"putpixel with pendingresize active");
 		return;
 	}
+                
 
-		unsigned char red,green,blue,alpha;
-		alpha=255;
+        //Tabla con los colores reales del Spectrum. Formato RGB
+        unsigned int color32=spectrum_colortable[color];
 
-            int index = 4*(x+y*pixel_screen_width);
-
-		//Tabla con los colores reales del Spectrum. Formato RGB
-
-		/*
-		// Escribir los 4 bytes por separado
-	    //no hace falta mascara &255 dado que son variables unsigned char
-	    int rgbcolor=spectrum_colortable[color];
-	    red=(rgbcolor>>16); //&255;
-	    green=(rgbcolor>>8); //&255;
-	    blue=(rgbcolor); //&255;
-
-
-            pixel_screen_data[index++]  =blue;
-            pixel_screen_data[index++]=green;
-            pixel_screen_data[index++]=red;
-            pixel_screen_data[index]=alpha;
-		*/
-
-
-		//prueba a escribir de golpe los 32 bits. no va mas rapido que con el metodo anterior
-		unsigned int color32=spectrum_colortable[color];
-		//agregar alpha
-		color32 |=0xFF000000;
-		//y escribir
-		unsigned int *p;
-		p=(unsigned int *) &pixel_screen_data[index];
-		*p=color32;
-
-    //    }
-    //}
-
+        //y escribir
+        scrcocoa_putpixel_final_rgb(x,y,color32);
+               
 
 }
 
+//int mostrado_trace=0;
+
+//extern int running_realloc;
+
+void scrcocoa_putpixel(int x,int y,unsigned int color)
+{
+
+
+        if (menu_overlay_activo==0) {
+                //Putpixel con menu cerrado
+                scrcocoa_putpixel_final(x,y,color);
+                return;
+        }          
+
+/*if (buffer_layer_machine==NULL) {
+        printf ("----buffer_layer_machine null running_realloc %d\n",running_realloc);
+        debug_exec_show_backtrace();
+        exit(1);
+}*/
+
+
+//temporal
+/*if (x>=ancho_layer_menu_machine || y>=alto_layer_menu_machine)  {
+        if (!mostrado_trace) {
+                printf ("out of range scrcocoa_putpixel x %d y %d limit %d %d\n",x,y,ancho_layer_menu_machine,alto_layer_menu_machine);
+                debug_exec_show_backtrace();
+                mostrado_trace=1;
+                sleep(1);
+        }
+        return;
+}*/
+
+
+
+        //Metemos pixel en layer adecuado
+	buffer_layer_machine[y*ancho_layer_menu_machine+x]=color;   
+   
+
+        //Putpixel haciendo mix  
+        screen_putpixel_mix_layers(x,y);   
+}
 
 void scrcocoa_putchar_zx8081(int x,int y, z80_byte caracter)
 {
@@ -2364,20 +2283,20 @@ void scrcocoa_messages_debug(char *s)
 }
 
 //Rutina de putchar para menu
-void scrcocoa_putchar_menu(int x,int y, z80_byte caracter,z80_byte tinta,z80_byte papel)
+void scrcocoa_putchar_menu(int x,int y, z80_byte caracter,int tinta,int papel)
 {
 
-        z80_bit inverse,f;
+        z80_bit inverse;
 
         inverse.v=0;
-        f.v=0;
+
         //128 y 129 corresponden a franja de menu y a letra enye minuscula
         if (caracter<32 || caracter>MAX_CHARSET_GRAPHIC) caracter='?';
-        scr_putsprite_comun_zoom(&char_set[(caracter-32)*8],x,y,inverse,tinta,papel,f,menu_gui_zoom);
+        scr_putchar_menu_comun_zoom(caracter,x,y,inverse,tinta,papel,menu_gui_zoom);
 
 }
 
-void scrcocoa_putchar_footer(int x,int y, z80_byte caracter,z80_byte tinta,z80_byte papel)
+void scrcocoa_putchar_footer(int x,int y, z80_byte caracter,int tinta,int papel)
 {
 
         int yorigen;
@@ -2389,13 +2308,16 @@ void scrcocoa_putchar_footer(int x,int y, z80_byte caracter,z80_byte tinta,z80_b
         //scr_putchar_menu(x,yorigen+y,caracter,tinta,papel);
 	y +=yorigen;
 	//printf ("y: %d\n",y); entre 31,32 y 33 normalmente
-	z80_bit inverse,f;
+	z80_bit inverse;
 
 	inverse.v=0;
-	f.v=0;
+
 	//128 y 129 corresponden a franja de menu y a letra enye minuscula
 	if (caracter<32 || caracter>MAX_CHARSET_GRAPHIC) caracter='?';
-	scr_putsprite_comun_zoom(&char_set[(caracter-32)*8],x,y,inverse,tinta,papel,f,1);
+	//scr_putchar_menu_comun_zoom(caracter,x,y,inverse,tinta,papel,1);
+
+
+        scr_putchar_footer_comun_zoom(caracter,x,y,inverse,tinta,papel);
 
 }
 
@@ -2455,11 +2377,10 @@ void scrcocoa_refresca_pantalla_solo_driver(void)
 {
 // Prueba para cuando se redimensiona ventana desde el easter egg
 //if (pendingresize) scrcocoa_refresca_pantalla();
-#ifdef COCOA_OPENGL
+
+        
 	[cocoaView render];
-#else
-	[cocoaView display];
-#endif
+
 
 }
 
@@ -2468,6 +2389,8 @@ void scrcocoa_refresca_pantalla_solo_driver(void)
 void scrcocoa_refresca_pantalla(void)
 {
 
+        //printf ("inicio scrcocoa_refresca_pantalla\n");
+
 	if (pendiente_z88_draw_lower) {
 		screen_z88_draw_lower_screen();
 		pendiente_z88_draw_lower=0;
@@ -2475,12 +2398,21 @@ void scrcocoa_refresca_pantalla(void)
 	}
 
 
-	if (pendingresize && pendingresize_w!=0 && pendingresize_h!=0) {
-		//printf ("redimensionar desde refresca_pantalla\n");
+        if (pendingresize) return;
+
+	/*if (pendingresize && pendingresize_w!=0 && pendingresize_h!=0) {
+		printf ("redimensionar desde refresca_pantalla\n");
 		[normalWindow redimensionaVentana:pendingresize_w height:pendingresize_h];
 		pendingresize=0;
-	}
+	}*/
 
+        if (sem_screen_refresh_reallocate_layers) {
+                //printf ("--Screen layers are being reallocated. return\n");
+                //debug_exec_show_backtrace();
+                return;
+        }
+
+        sem_screen_refresh_reallocate_layers=1;
 
 
 
@@ -2492,6 +2424,10 @@ void scrcocoa_refresca_pantalla(void)
 	else if (MACHINE_IS_PRISM) {
 		screen_prism_refresca_pantalla();
 	}
+
+        else if (MACHINE_IS_TBBLUE) {
+                screen_tbblue_refresca_pantalla();
+        }
 
     else if (MACHINE_IS_SPECTRUM) {
 
@@ -2525,17 +2461,17 @@ void scrcocoa_refresca_pantalla(void)
 		}
     }
 
-    else if (MACHINE_IS_Z88) {
+        else if (MACHINE_IS_Z88) {
                 screen_z88_refresca_pantalla();
-    }
+        }
 
 	else if (MACHINE_IS_ACE) {
 		scr_refresca_pantalla_y_border_ace();
 	}
 
-    else if (MACHINE_IS_CPC) {
+        else if (MACHINE_IS_CPC) {
                 scr_refresca_pantalla_y_border_cpc();
-    }
+        }
 
 	else if (MACHINE_IS_SAM) {
 		scr_refresca_pantalla_y_border_sam();
@@ -2553,18 +2489,22 @@ void scrcocoa_refresca_pantalla(void)
         //printf ("%d\n",spectrum_colortable[1]);
 
 	if (menu_overlay_activo) {
-        menu_overlay_function();
-    }
-
-
-    //Escribir footer
-    draw_footer();
-
-
-	scrcocoa_refresca_pantalla_solo_driver();
+                //printf ("antes de menu_overlay_function en cocoa\n");
+                menu_overlay_function();
+                //printf ("despues de menu_overlay_function en cocoa\n");
+        }
 
 
 
+        //Escribir footer
+        draw_middle_footer();
+
+
+        scrcocoa_refresca_pantalla_solo_driver();
+
+
+
+        sem_screen_refresh_reallocate_layers=0;
 
 
 }
@@ -2672,18 +2612,69 @@ void scrcocoa_detectedchar_print(z80_byte caracter)
         fflush(stdout);
 }
 
+//Estos valores no deben ser mayores de OVERLAY_SCREEN_MAX_WIDTH y OVERLAY_SCREEN_MAX_HEIGTH
+int scrcocoa_get_menu_width(void)
+{
+        int max=screen_get_emulated_display_width_no_zoom_border_en();
+
+        max +=screen_get_ext_desktop_width_no_zoom();
+
+        max=max/menu_char_width/menu_gui_zoom;
+        if (max>OVERLAY_SCREEN_MAX_WIDTH) max=OVERLAY_SCREEN_MAX_WIDTH;
+
+                //printf ("max x: %d %d\n",max,screen_get_emulated_display_width_no_zoom_border_en());
+
+        return max;
+}
+
+
+int scrcocoa_get_menu_height(void)
+{
+        int max=screen_get_emulated_display_height_no_zoom_border_en()/8/menu_gui_zoom;
+        if (max>OVERLAY_SCREEN_MAX_HEIGTH) max=OVERLAY_SCREEN_MAX_HEIGTH;
+
+                //printf ("max y: %d %d\n",max,screen_get_emulated_display_height_no_zoom_border_en());
+        return max;
+}
+
+
+int scrcocoa_driver_can_ext_desktop (void)
+{
+        return 1;
+}
+
 
 int scrcocoa_init (void) {
 
-#ifdef COCOA_OPENGL
-	debug_printf (VERBOSE_INFO,"Init COCOA(OpenGL) Video Driver");
-#else
-	debug_printf (VERBOSE_INFO,"Init COCOA Video Driver");
-#endif
 
+	debug_printf (VERBOSE_INFO,"Init COCOA(OpenGL) Video Driver");
+
+
+        //printf ("scrcocoa_init\n");
+
+        int soyelmainthread;
+
+        if ([NSThread isMainThread]) {
+                //printf ("Soy el main thread\n");
+                soyelmainthread=1;
+        }
+
+        else {
+                //printf ("No soy el main thread\n");
+                //Esto solo se puede hacer desde el main thread
+                //dispatch_sync(dispatch_get_main_queue(), cocoaView toggleFullScreen:nil);
+                soyelmainthread=0;
+        }
 
         //Inicializaciones necesarias
         scr_putpixel=scrcocoa_putpixel;
+        scr_putpixel_final=scrcocoa_putpixel_final;
+        scr_putpixel_final_rgb=scrcocoa_putpixel_final_rgb;
+
+        scr_get_menu_width=scrcocoa_get_menu_width;
+        scr_get_menu_height=scrcocoa_get_menu_height;
+        scr_driver_can_ext_desktop=scrcocoa_driver_can_ext_desktop;
+
         scr_putchar_zx8081=scrcocoa_putchar_zx8081;
         scr_debug_registers=scrcocoa_debug_registers;
         scr_messages_debug=scrcocoa_messages_debug;
@@ -2705,17 +2696,23 @@ int scrcocoa_init (void) {
 
 
 
-    pixel_screen_width = screen_get_window_size_width_zoom_border_en();
-    pixel_screen_height = screen_get_window_size_height_zoom_border_en();
+        pixel_screen_width = screen_get_window_size_width_zoom_border_en()+screen_get_ext_desktop_width_zoom();
+        pixel_screen_height = screen_get_window_size_height_zoom_border_en();
+
+   
 
 //screen_get_window_size_width_zoom_border_en(), screen_get_window_size_height_zoom_border_en()
 
-    NSInteger dataLength = pixel_screen_width * pixel_screen_height * 4;
-    //UInt8 *pixel_screen_data = (UInt8*)malloc(dataLength * sizeof(UInt8));
-    pixel_screen_data = (UInt8*)malloc(dataLength * sizeof(UInt8));
+        NSInteger dataLength = pixel_screen_width * pixel_screen_height * 4;
+        //UInt8 *pixel_screen_data = (UInt8*)malloc(dataLength * sizeof(UInt8));
+        pixel_screen_data = (UInt8*)malloc(dataLength * sizeof(UInt8));
 
+    scr_reallocate_layers_menu(pixel_screen_width,pixel_screen_height);     
 
+        //Esto tiene que llamarlo desde el thread principal:
+        dispatch_async(dispatch_get_main_queue(), ^{
    [cocoaView resizeContentToWidth:(int)(pixel_screen_width) height:(int)(pixel_screen_height) ];
+        });
 
 
 	if (ventana_fullscreen) {
@@ -2726,3 +2723,4 @@ int scrcocoa_init (void) {
 
 	return 0;
 }
+

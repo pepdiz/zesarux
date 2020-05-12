@@ -19,6 +19,9 @@
 
 */
 
+//para memcpy de ldir hack
+#include <string.h>
+
 #include "cpu.h"
 #include "operaciones.h"
 #include "debug.h"
@@ -29,6 +32,7 @@
 #include "screen.h"
 #include "settings.h"
 
+
 void invalid_opcode_ed(char *s)
 {
 	if (debug_shows_invalid_opcode.v) {
@@ -36,6 +40,7 @@ void invalid_opcode_ed(char *s)
 	        //printf ("Invalid opcode %s. Final PC: %04XH\n",s,reg_pc);
         }
 
+        //Y acaba ejecutando un NOP tal cual
 
 }
 
@@ -255,20 +260,7 @@ void instruccion_ed_37 ()
 
 void instruccion_ed_38 ()
 {
-        if (MACHINE_IS_TBBLUE) {
-                //mirror de         ED 26          4+4 mirror the bits in DE
-                //15 14 13 12 11 10 9 8 76543210 -> 0123456789 10 11 12 13 14 15
-                int i;
-                z80_int result_de=0;
-                for (i=0;i<16;i++) {
-                  result_de = result_de >> 1;
-                  if (DE&32768) result_de |=32768;
-                  DE=DE << 1;
-                }
-
-                DE=result_de;
-        }  
-        else invalid_opcode_ed("237 38");
+        invalid_opcode_ed("237 38");
 }
 
 void instruccion_ed_39 ()
@@ -289,27 +281,99 @@ void instruccion_ed_39 ()
 
 void instruccion_ed_40 ()
 {
+    if (!MACHINE_IS_TBBLUE) {
         invalid_opcode_ed("237 40");
+        return;
+    }
+
+    //BSLA DE,B   ED 28: DE = DE<<(B&31), no flags
+    // barrel-shift left of DE, B (5 bits) times
+    int shift_amount = reg_b & 31;
+    if (0 == shift_amount) return;
+    if (16 <= shift_amount) {           // 16+ shifts set DE to zero
+        DE = 0;
+    } else {
+        DE = DE << shift_amount;
+    }
 }
 
 void instruccion_ed_41 ()
 {
+    if (!MACHINE_IS_TBBLUE) {
         invalid_opcode_ed("237 41");
+        return;
+    }
+
+    //BSRA DE,B   ED 29: DE = signed(DE)>>(B&31), no flags
+    // aritmetic barrel-shift right of DE, B (5 bits) times
+    int shift_amount = reg_b & 31;
+    int de_is_negative = (1<<15) & DE;  // extract top bit
+    if (0 == shift_amount) return;
+    if (15 <= shift_amount) {           // 15+ shifts set DE either to 0 or ~0
+        DE = de_is_negative ? ~0 : 0;
+    } else {                            // for shift amount 1..14 do the shifting
+        z80_int de_bottom_part = DE >> shift_amount;
+        z80_int de_upper_part = 0;      // 0 for positive/zero values
+        if (de_is_negative) {           // negative values have to fill vacant top bits with ones
+            de_upper_part = 0xFFFF << (15-shift_amount);
+        }
+        DE = de_upper_part | de_bottom_part;
+    }
 }
 
 void instruccion_ed_42 ()
 {
+    if (!MACHINE_IS_TBBLUE) {
         invalid_opcode_ed("237 42");
+        return;
+    }
+
+    //BSRL DE,B   ED 2A: DE = unsigned(DE)>>(B&31), no flags
+    // logical barrel-shift right of DE, B (5 bits) times
+    int shift_amount = reg_b & 31;
+    if (0 == shift_amount) return;
+    if (16 <= shift_amount) {           // 16+ shifts set DE to 0
+        DE = 0;
+    } else {                            // for shift amount 1..15 do the shifting
+        DE = DE >> shift_amount;        // DE is unsigned short, C shift is OK
+    }
 }
 
 void instruccion_ed_43 ()
 {
+    if (!MACHINE_IS_TBBLUE) {
         invalid_opcode_ed("237 43");
+        return;
+    }
+
+    //BSRF DE,B   ED 2B: DE = ~(unsigned(~DE)>>(B&31)), no flags
+    // barrel-shift right of DE, B (5 bits) times, setting top bits with one
+    int shift_amount = reg_b & 31;
+    if (0 == shift_amount) return;
+    if (16 <= shift_amount) {           // 16+ shifts set DE to ~0
+        DE = ~0;
+    } else {                            // for shift amount 1..15 do the shifting and setting
+        z80_int de_bottom_part = DE >> shift_amount;
+        z80_int de_upper_part = 0xFFFF << (16-shift_amount);
+        DE = de_upper_part | de_bottom_part;
+    }
 }
 
 void instruccion_ed_44 ()
 {
+    if (!MACHINE_IS_TBBLUE) {
         invalid_opcode_ed("237 44");
+        return;
+    }
+
+    //BRLC DE,B   ED 2C: DE = DE<<(B&15) | DE>>(16-B&15), no flags
+    // barrel-roll left without carry of DE, B (4 bits) times
+    int rolls_amount = reg_b & 15;
+    if (0 < rolls_amount) {
+        z80_int de_upper_part = DE<<rolls_amount;
+        z80_int de_bottom_part = DE>>(16-rolls_amount);
+        DE = de_upper_part | de_bottom_part;
+    }
 }
 
 void instruccion_ed_45 ()
@@ -603,6 +667,36 @@ void instruccion_ed_69 ()
 void instruccion_ed_70 ()
 {
 //coded70:                        ;IM 0
+/*
+Codificación de modos IM:
+
+According to Goran Devic Z80 reverse engineering schema, and the conclusions from Simon Owen, Gerton Lunter, Miguel Angel Rodriguez Jodar:
+
+Now, bits 4:3 are renamed as db[1] and db[0] in this schematic. They can be 00, which officially means IM 0. 10 officially means IM 1 and 11 officially means IM 2.
+
+The Z80 has two registers named im1 and im2. Whichever of them is set indicates which interrupt mode is active (IM1 or IM 2). If none of them is set, then it's IM 0. You can see that it is so with the above combinarions:
+
+Combination 0x makes the im1 register to store a 0, as the output from the AND gate will be 0. The same goes for combination 11 because of the inverter before one of the inputs to the AND. In fact, the only combination that makes a 1 to be stored is 10 (which is the official way to encode IM 1)
+
+Combination 11 makes the second register (im2) to store a 1 because of the AND gate. Any other combination will make this register to store a 0. Again, this is consistent with the official way to encode IM 2.
+
+Therefore, combination 00 and 01 won't set any of both registers, and this will be interpreted as IM 0.
+
+The interrupt mode after a reset, as you can see, is IM 0.
+
+
+Mirando los bits 4 y 3 de opcode
+
+00: IM0
+01: IM0
+10: IM1
+11: IM2
+
+en este caso: 70 = 0100 0110
+                      - -
+                      0 0 = IM0
+
+*/
 	im_mode=0;
 }
 
@@ -677,18 +771,20 @@ void instruccion_ed_76 ()
 void instruccion_ed_77 ()
 {
 //RETI
-	iff1.v=iff2.v;
+	//iff1.v=iff2.v; Reti no hace esto
 	reg_pc=pop_valor();
 }
 
 void instruccion_ed_78 ()
 {
 //coded70:                        ;IM 0
+/*
+en este caso: 78 = 0100 1110
+                      - -
+                      0 1 = IM0
+*/
         im_mode=0;
 }
-
-
-
 
 void instruccion_ed_79 ()
 {
@@ -778,8 +874,12 @@ void instruccion_ed_85 ()
 
 void instruccion_ed_86 ()
 {
-
 //coded86:                        ;IM 1
+/*
+en este caso: 86 = 0101 0110
+                      - -
+                      1 0 = IM1
+*/
 	im_mode=1;
 }
 
@@ -870,7 +970,12 @@ void instruccion_ed_93 ()
 
 void instruccion_ed_94 ()
 {
-//coded94:                        ;IM 2
+//IM 2
+/*
+en este caso: 94 = 0101 1110
+                      - -
+                      1 1 = IM2
+*/
 	im_mode=2;
 }
 
@@ -958,9 +1063,13 @@ void instruccion_ed_101 ()
 
 void instruccion_ed_102 ()
 {
-//           ;IM 0/1
+//IM 0
+/*
+en este caso: 102 = 0110 0110
+                       - -
+                       0 0 = IM0
+*/
         im_mode=0;
-
 }
 
 void instruccion_ed_103 ()
@@ -1073,12 +1182,14 @@ void instruccion_ed_109 ()
 
 void instruccion_ed_110 ()
 {
-//           ;IM 0/1
+//IM 0
+/*
+en este caso: 110 = 0110 1110
+                       - -
+                       0 1 = IM0
+*/
         im_mode=0;
-
 }
-
-
 
 void instruccion_ed_111 ()
 {
@@ -1146,8 +1257,9 @@ void instruccion_ed_113 ()
         set_memptr(BC+1);
 #endif
 
-	//Esto es diferente en NMOS y en CMOS
-	if (MACHINE_IS_Z88 || MACHINE_IS_TSCONF) {
+	//Esto es diferente entre NMOS y CMOS
+        if (z80_cpu_current_type==Z80_TYPE_CMOS) {
+	//if (MACHINE_IS_Z88 || MACHINE_IS_TSCONF) {
 		//CMOS
 		out_port(BC, 255);
 	}
@@ -1203,11 +1315,14 @@ void instruccion_ed_117 ()
 
 void instruccion_ed_118 ()
 {
-//           ;IM 0/1
-        im_mode=0;
-
+//IM 1
+/*
+en este caso: 118 = 0111 0110
+                       - -
+                       1 0 = IM1
+*/
+        im_mode=1;
 }
-
 
 void instruccion_ed_119 ()
 {
@@ -1283,11 +1398,13 @@ void instruccion_ed_125 ()
 
 void instruccion_ed_126 ()
 {
-
-//coded126:                        ;IM 2
+//IM 2
+/*
+en este caso: 126 = 0111 1110
+                       - -
+                       1 1 = IM2
+*/
         im_mode=2;
-
-
 }
 
 void instruccion_ed_127 ()
@@ -1352,7 +1469,7 @@ void instruccion_ed_138 ()
                 z80_int value=0;
                 value |= (lee_byte_pc()<<8);
                 value |= lee_byte_pc();
-                push_valor( value );
+                push_valor( value , PUSH_VALUE_TYPE_PUSH);
         }
 
         else invalid_opcode_ed("237 138");
@@ -1361,13 +1478,7 @@ void instruccion_ed_138 ()
 void instruccion_ed_139 ()
 {
 
-        if (MACHINE_IS_TBBLUE) {
-                //POPX
-                //popx              ED 8B         4+4  pop value and disguard
-                reg_sp +=2;
-        }
-
-        else invalid_opcode_ed("237 139");
+        invalid_opcode_ed("237 139");
 }
 
 void instruccion_ed_140 ()
@@ -1524,8 +1635,8 @@ void instruccion_ed_149 ()
                 //ED 95   DE holding the Y,X. Bits 0-2 of X (E) map to BIT 7 to 0 and store in A
                 //SETAE : A = 2^(7 - E&0x7)  The bottom 3 bits of E is a bit number and 7-that_bit is the bit set in A.  
                 z80_byte numero_bit=reg_e & 7;
-                z80_byte resultado=1;
-                if (numero_bit>0) resultado=resultado<<numero_bit;
+                z80_byte resultado=128;
+                if (numero_bit>0) resultado=resultado>>numero_bit;
                 reg_a=resultado;
         }
         else invalid_opcode_ed("237 149");
@@ -1543,7 +1654,23 @@ void instruccion_ed_151 ()
 
 void instruccion_ed_152 ()
 {
+    if (!MACHINE_IS_TBBLUE) {
         invalid_opcode_ed("237 152");
+        return;
+    }
+
+    //JP (C)   ED 98: PC = PC&$C000 + IN(C)<<6, PC is "next-instruction" aka "$+2", no flags
+    // Jumps at one of 256 subroutines (64B long in 16kiB memory segment), selected by "IN (C)" value
+
+    // IN (C) part
+    z80_int in_valor = (z80_int)lee_puerto(reg_b,reg_c);    // read + extend to 16b
+
+    // combine it into new PC, keeping two top bits from current PC (pointing at next instruction)
+    in_valor <<= 6;
+    reg_pc = (reg_pc&0xC000) | in_valor;
+#ifdef EMULATE_MEMPTR
+    set_memptr(reg_pc);     // not sure how this actually works, needs Cesar review
+#endif
 }
 
 void instruccion_ed_153 ()
@@ -1701,7 +1828,7 @@ void instruccion_ed_163 ()
 void instruccion_ed_164 ()
 {
         if (MACHINE_IS_TBBLUE) {
-                //ED A4 As LDI, if byte == A then skips byte.
+                //LDIX    ED A4 As LDI, if byte == A then skips byte.
         //LDI
 
 /*
@@ -1736,7 +1863,24 @@ LDIR        --000-  Load, Inc., Repeat    LDI till BC=0
 
 void instruccion_ed_165 ()
 {
-        invalid_opcode_ed("237 165");
+	//Leer ed y opcode: 4+4=8 T estados
+
+	if (MACHINE_IS_TBBLUE) {
+		//LDWS (LoaD Wasp Special) (0xED 0xA5), (DE) = (HL) : D++ : L++ 14Ts. BC is not modified. Flags are set as if an INC D instruction was executed
+		z80_byte byte_leido;
+
+		byte_leido=peek_byte(HL);  //3 T
+		poke_byte(DE,byte_leido);  //3 T
+
+		reg_l++;
+
+		inc_8bit(reg_d); 
+	}
+	//Total T-estados = 8+3+3=14
+	
+        else invalid_opcode_ed("237 165");
+
+	
 }
 
 void instruccion_ed_166 ()
@@ -1868,7 +2012,7 @@ void instruccion_ed_171 ()
 void instruccion_ed_172 ()
 {
         if (MACHINE_IS_TBBLUE) {
-                //ED AC   As LDD, except DE++ and if byte == A then skips byte.
+                //LDDX    ED AC   As LDD, except DE++ and if byte == A then skips byte.
 	z80_byte byte_leido;
 
 	byte_leido=peek_byte(HL);
@@ -1909,10 +2053,54 @@ void instruccion_ed_175 ()
         invalid_opcode_ed("237 175");
 }
 
+void instruccion_ed_176_optimized ()
+{
+
+//LDIR optimized
+//printf ("LDIR optimized origen %d destino %d long %d\n",HL,DE,BC);
+        if (0 /*MACHINE_IS_SPECTRUM_48*/) {
+
+                //memcpy a lo bestia. lastima: esto no parece llevarse bien con cosas como:
+                //LDIR optimized origen 22208 destino 22209 long 63
+                //que hace el basic, porque se solapan
+                memcpy(&memoria_spectrum[DE],&memoria_spectrum[HL],BC);
+                HL +=BC;
+                DE +=BC;
+                BC = 0;
+        }
+
+        else {
+
+                z80_byte byte_leido;
+
+                do {
+
+                        byte_leido=peek_byte_no_time(HL);
+                        poke_byte_no_time(DE,byte_leido);
+
+                        HL++; DE++;
+                        BC--;
+                } while (BC!=0);
+
+        }
+
+        Z80_FLAGS &=(255-FLAG_H-FLAG_N-FLAG_PV-FLAG_3-FLAG_5);
+
+}
+
+
+
 void instruccion_ed_176 ()
 {
 
 //LDIR
+
+        if (cpu_ldir_lddr_hack_optimized.v) {
+                
+                instruccion_ed_176_optimized();
+               
+                return;
+        }
 
 #ifdef EMULATE_MEMPTR
         if (reg_b!=0 || reg_c!=1) set_memptr(reg_pc-1);
@@ -2100,18 +2288,95 @@ void instruccion_ed_181 ()
 
 void instruccion_ed_182 ()
 {
-        invalid_opcode_ed("237 182");
+        if (MACHINE_IS_TBBLUE) {
+                //LDIRSCALE ED B6 as LDIR but 24 bit source pointer HLA' takes high 16 bits as address
+                //??? no entiendo que hace
+
+                invalid_opcode_ed("Unimplemented tbblue LDIRSCALE");
+
+        }
+
+        else invalid_opcode_ed("237 182");
 }
 
 void instruccion_ed_183 ()
 {
+    if (!MACHINE_IS_TBBLUE) {
         invalid_opcode_ed("237 183");
+        return;
+    }
+
+    //LDPIRX ED B7: do{t:=(HL&$FFF8+E&7)*; {if t!=A DE*:=t;} DE++; BC--}while(BC>0)
+    //LDPIRX is similar to LDIRX, but it's for 8 byte pattern fills
+    //basically the lower 3 bits of E are put into lower 3 bits of L, (but real HL is not modified!)
+
+    z80_int source_adr = (reg_hl & ~7) | (reg_e & 7);
+
+//Como instruccion ldirx excepto el HL incrementar...
+#ifdef EMULATE_MEMPTR
+    if (reg_b!=0 || reg_c!=1) set_memptr(reg_pc-1);
+#endif
+
+    z80_byte byte_leido = peek_byte(source_adr);
+    //if byte == A then skips byte.
+    if (reg_a!=byte_leido) poke_byte(DE,byte_leido);
+
+    contend_write_no_mreq( DE, 1 );
+    contend_write_no_mreq( DE, 1 );
+
+    BC--;
+    if (BC) {
+        contend_write_no_mreq( DE, 1 );
+        contend_write_no_mreq( DE, 1 );
+        contend_write_no_mreq( DE, 1 );
+        contend_write_no_mreq( DE, 1 );
+        contend_write_no_mreq( DE, 1 );
+        reg_pc -=2;
+    }
+
+    DE++;
+
+    //LDPIRX does not affect flags
 }
+
+
+void instruccion_ed_184_optimized ()
+{
+
+//LDDR optimized
+//printf ("LDDR optimized origen %d destino %d long %d\n",HL,DE,BC);
+      
+
+        z80_byte byte_leido;
+
+        do {
+
+                byte_leido=peek_byte_no_time(HL);
+                poke_byte_no_time(DE,byte_leido);
+
+                HL--; DE--;
+                BC--;
+        } while (BC!=0);
+
+     
+
+        Z80_FLAGS &=(255-FLAG_H-FLAG_N-FLAG_PV-FLAG_3-FLAG_5);
+
+}
+
+
 
 
 void instruccion_ed_184 ()
 {
 //LDDR
+
+        if (cpu_ldir_lddr_hack_optimized.v) {
+                
+                instruccion_ed_184_optimized();
+               
+                return;
+        }
 #ifdef EMULATE_MEMPTR
         if (reg_b!=0 || reg_c!=1) set_memptr(reg_pc-1);
 #endif
@@ -2248,8 +2513,8 @@ void instruccion_ed_187 ()
 void instruccion_ed_188 ()
 {
         if (MACHINE_IS_TBBLUE) {
-                //ED BC    As LDDR, except DE++ and if byte == A then skips byte.
-//LDDR
+                //LDDRX   ED BC    As LDDR, except DE++ and if byte == A then skips byte.
+
 #ifdef EMULATE_MEMPTR
         if (reg_b!=0 || reg_c!=1) set_memptr(reg_pc-1);
 #endif

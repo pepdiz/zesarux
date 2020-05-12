@@ -30,6 +30,11 @@
 #include "menu.h"
 #include "tape.h"
 
+#include "chloe.h"
+#include "prism.h"
+#include "zxuno.h" 
+#include "tbblue.h"
+
 
 
 z80_byte timex_port_f4;
@@ -53,10 +58,10 @@ z80_byte *timex_rom_mem_table[1];
 z80_byte *timex_home_ram_mem_table[3];
 
 //Direcciones donde estan cada pagina de ram ex
-z80_byte *timex_ex_ram_mem_table[8];
+z80_byte *timex_ex_rom_mem_table[8];
 
 //Direcciones donde estan cada pagina de ram dock
-z80_byte *timex_dock_ram_mem_table[8];
+z80_byte *timex_dock_rom_mem_table[8];
 
 //Direcciones actuales mapeadas, bloques de 8 kb
 z80_byte *timex_memory_paged[8];
@@ -136,7 +141,7 @@ void timex_set_memory_pages(void)
 				z80_byte *puntero_memoria;
 				if (timex_port_ff&128) {
 					//EX
-					puntero_memoria=timex_ex_ram_mem_table[bloque_ram];
+					puntero_memoria=timex_ex_rom_mem_table[bloque_ram];
 					timex_type_memory_paged[bloque_ram]=TIMEX_MEMORY_TYPE_EX;
 
 					//temp
@@ -147,7 +152,7 @@ void timex_set_memory_pages(void)
 				}
 				else {
 					//DOCK
-					puntero_memoria=timex_dock_ram_mem_table[bloque_ram];
+					puntero_memoria=timex_dock_rom_mem_table[bloque_ram];
 					timex_type_memory_paged[bloque_ram]=TIMEX_MEMORY_TYPE_DOCK;
 				}
 				timex_memory_paged[bloque_ram]=puntero_memoria;
@@ -174,10 +179,10 @@ void timex_init_memory_tables(void)
 //z80_byte *timex_home_ram_mem_table[8];
 
 //Direcciones donde estan cada pagina de ram ex
-//z80_byte *timex_ex_ram_mem_table[8];
+//z80_byte *timex_ex_rom_mem_table[8];
 
 //Direcciones donde estan cada pagina de ram dock
-//z80_byte *timex_dock_ram_mem_table[8];
+//z80_byte *timex_dock_rom_mem_table[8];
 
 //Direcciones actuales mapeadas, bloques de 8 kb
 	*/
@@ -201,27 +206,27 @@ void timex_init_memory_tables(void)
 	}
 
 	for (i=0;i<8;i++) {
-		timex_ex_ram_mem_table[i]=puntero;
+		timex_ex_rom_mem_table[i]=puntero;
 		puntero +=8192;
 	}
 
 	for (i=0;i<8;i++) {
-		timex_dock_ram_mem_table[i]=puntero;
+		timex_dock_rom_mem_table[i]=puntero;
 		puntero +=8192;
 	}
 
 	//Parece que los 8 kb de rom que se cargan en ex rom[0] tambien estan presentes en rom[1]
-	timex_ex_ram_mem_table[1]=timex_ex_ram_mem_table[0];
+	timex_ex_rom_mem_table[1]=timex_ex_rom_mem_table[0];
 	//temp
-	//timex_ex_ram_mem_table[2]=timex_ex_ram_mem_table[0];
-	//timex_ex_ram_mem_table[3]=timex_ex_ram_mem_table[0];
-	//timex_ex_ram_mem_table[4]=timex_ex_ram_mem_table[0];
-	//timex_ex_ram_mem_table[5]=timex_ex_ram_mem_table[0];
-	//timex_ex_ram_mem_table[6]=timex_ex_ram_mem_table[0];
-	//timex_ex_ram_mem_table[7]=timex_ex_ram_mem_table[0];
+	//timex_ex_rom_mem_table[2]=timex_ex_rom_mem_table[0];
+	//timex_ex_rom_mem_table[3]=timex_ex_rom_mem_table[0];
+	//timex_ex_rom_mem_table[4]=timex_ex_rom_mem_table[0];
+	//timex_ex_rom_mem_table[5]=timex_ex_rom_mem_table[0];
+	//timex_ex_rom_mem_table[6]=timex_ex_rom_mem_table[0];
+	//timex_ex_rom_mem_table[7]=timex_ex_rom_mem_table[0];
 
 	//prueba
-	//timex_dock_ram_mem_table[0]=timex_ex_ram_mem_table[0];
+	//timex_dock_rom_mem_table[0]=timex_ex_rom_mem_table[0];
 
 
 }
@@ -237,7 +242,7 @@ void timex_empty_dock_space(void)
 
 	z80_byte *puntero;
 
-	puntero=timex_dock_ram_mem_table[0];
+	puntero=timex_dock_rom_mem_table[0];
 
 	for (i=0;i<65536;i++) {
 		*puntero=255;
@@ -284,7 +289,7 @@ void timex_insert_dck_cartridge(char *filename)
 				//Leer 8kb
 				int segmento=bloque*8192;
 				debug_printf (VERBOSE_DEBUG,"Loading 8kb block at Segment %04XH-%04XH",segmento,segmento+8191);
-				fread(timex_dock_ram_mem_table[bloque],1,8192,ptr_cartridge);
+				fread(timex_dock_rom_mem_table[bloque],1,8192,ptr_cartridge);
 			}
 
 			else {
@@ -421,5 +426,75 @@ om address 24576
         }
 
         return 0;
+
+}
+
+
+void set_timex_port_ff(z80_byte value)
+{
+	if (timex_video_emulation.v) {
+
+		if ( (timex_port_ff&7)!=(value&7)) {
+	                char mensaje[200];
+
+			if ((value&7)==0) sprintf (mensaje,"Setting Timex Video Mode 0 (standard screen 0)");
+			else if ((value&7)==1) sprintf (mensaje,"Setting Timex Video Mode 1 (standard screen 1)");
+			else if ((value&7)==2) sprintf (mensaje,"Setting Timex Video Mode 2 (hires colour 8x1)");
+			else if ((value&7)==6) {
+				if ( (zoom_x&1)==0 && timex_mode_512192_real.v) {
+					sprintf (mensaje,"Setting Timex Video Mode 6 (512x192 monochrome)");
+				}
+
+				else if (MACHINE_IS_PRISM || MACHINE_IS_TBBLUE) {
+					sprintf (mensaje,"Setting Timex Video Mode 6 (512x192 monochrome)");
+                                }
+
+				else {
+					sprintf (mensaje,"Timex Video Mode 6 (512x192 monochrome) needs Timex Real 512x192 setting enabled and horizontal zoom even. Reducing to 256x192");
+				}
+			}
+                        else sprintf (mensaje,"Setting Unknown Timex Video Mode %d",value);
+
+                	screen_print_splash_text_center(ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,mensaje);
+		}
+
+        	if ((value&7)==6) {
+                        //Indicar que se ha puesto modo timex en alguna parte del frame
+	                //timex_ugly_hack_last_hires=t_estados/screen_testados_linea;
+        	        //printf ("estableciendo modo timex en y: %d\n",timex_ugly_hack_last_hires);
+        	}
+
+
+		z80_byte last_timex_port_ff=timex_port_ff;
+		timex_port_ff=value;
+		//Color del border en modo timex hi-res sale de aqui
+		//Aunque con esto avisamos que el color del border en modo 512x192 se puede haber modificado
+		modificado_border.v=1;
+		if (last_timex_port_ff!=timex_port_ff) clear_putpixel_cache(); //porque se puede cambiar de modo, borrar la putpixel cache
+
+		if (MACHINE_IS_CHLOE_280SE) chloe_set_memory_pages();
+		if (MACHINE_IS_PRISM) prism_set_memory_pages();
+		if (MACHINE_IS_TIMEX_TS2068) timex_set_memory_pages();
+		if (is_zxuno_chloe_mmu() ) zxuno_set_memory_pages();
+		if (MACHINE_IS_TBBLUE) {
+			//Sincronizar los 5 bits bajos a registro tbblue			
+
+			/*
+			(W) 0x69 (105) => DISPLAY CONTROL 1 REGISTER
+
+			Bit	Function
+			7	Enable the Layer 2 (alias for Layer 2 Access Port ($123B) bit 1)
+			6	Enable ULA shadow (bank 7) display (alias for Memory Paging Control ($7FFD) bit 3)
+			5-0	alias for Timex Sinclair Video Mode Control ($xxFF) bits 5:0
+
+			*/
+			tbblue_registers[105] &= (128+64);
+			tbblue_registers[105] |= (value&63);
+
+
+
+		}
+
+	}
 
 }

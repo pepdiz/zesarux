@@ -1235,8 +1235,8 @@ void inicializa_tabla_contend(void)
                 //Empieza en 14335 con 65432100
         }
 
-	//TODO cpc464. de momento sin contend y no inicializamos tabla porque sino se sale de testados y se sale de la tabla
-	if (MACHINE_IS_CPC_464) {
+	//TODO cpc. de momento sin contend y no inicializamos tabla porque sino se sale de testados y se sale de la tabla
+	if (MACHINE_IS_CPC_464 || MACHINE_IS_CPC_4128) {
                 timings=contend_patron_no_contend;
                 offset_time=0;
                 offset_patron=0;

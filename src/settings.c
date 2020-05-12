@@ -32,6 +32,7 @@
 #include <sys/time.h>
 #include <errno.h>
 
+#include "settings.h"
 
 #include "menu.h"
 #include "menu_items.h"
@@ -88,6 +89,7 @@
 #include "esxdos_handler.h"
 #include "tsconf.h"
 #include "kartusho.h"
+#include "ifrom.h"
 #include "spritefinder.h"
 #include "snap_spg.h"
 #include "betadisk.h"
@@ -154,6 +156,10 @@ z80_bit hardware_debug_port={0};
 char zesarux_zxi_hardware_debug_file[PATH_MAX]="";
 
 
+//Si se muestra visualmem grafico en drivers grafico. Si no, muestra visualmem de texto en drivers graficos
+z80_bit setting_mostrar_visualmem_grafico={1}; 
+
+
 //
 // Snapshot Settings
 //
@@ -167,3 +173,70 @@ z80_bit autoload_snapshot_on_start;
 
 //ruta de autoguardado
 char autosave_snapshot_path_buffer[PATH_MAX];
+
+
+//
+// Tape Settings
+//
+
+//Si el autoload (reset machine, load"") se lanza con top speed
+z80_bit fast_autoload={0};
+
+
+
+//
+// Audio Settings
+//
+
+//Si se muestra piano grafico en drivers grafico. Si no, muestra piano de texto en drivers graficos
+z80_bit setting_mostrar_ay_piano_grafico={1}; 
+
+
+
+//
+// Hardware Settings
+//
+
+//Sensibilidad usada al leer kempston mouse desde spectrum
+int kempston_mouse_factor_sensibilidad=1;
+
+//
+// Display Settings
+//
+
+
+//Si debe enviar un espacio al final de cada palabra del adventure keyboard
+int adventure_keyboard_send_final_spc=0;
+
+//Tiempo que dura la tecla total (mitad de esto pulsada, mitad no pulsada). En 1/50 de segundo
+int adventure_keyboard_key_length=DEFAULT_ADV_KEYBOARD_KEY_LENGTH;
+
+
+//Usar caracteres extendidos de cursesw. La opcion se puede usar aunque no este compilado cursesw
+//(se cargará y grabará de config aunque no tenga ningún efecto)
+z80_bit use_scrcursesw={0};
+
+
+//Si se ha preguntado ya para descargar la imagen SD al seleccionar maquina tbblue
+z80_bit tbblue_autoconfigure_sd_asked={0};
+
+
+
+//Guardar scanlines en pixel/atributos en tbblue, requerido para demos hi-res (de spectrum , no de next necesariamente)
+//Por defecto, desactivado
+z80_bit tbblue_store_scanlines={0};
+
+//Lo mismo pero para el border
+z80_bit tbblue_store_scanlines_border={0};
+
+
+
+//
+// Windows Settings
+//
+
+//Si permitimos o no ventanas en background al pulsar F6
+int menu_allow_background_windows=0;
+
+//Reabrir ventanas al iniciar el emulador 
+z80_bit menu_reopen_background_windows_on_start={0};

@@ -22,8 +22,14 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#ifdef __FreeBSD__
+#include <limits.h>
+#endif
+
 #include "cpu.h"
 #include "compileoptions.h"
+#include "menu.h"
+#include "expression_parser.h"
 
 #include <stdio.h>
 #include <dirent.h>
@@ -34,6 +40,8 @@
 #define PATH_MAX MAX_PATH
 #define NAME_MAX MAX_PATH
 #endif
+
+
 
 extern void util_get_file_extension(char *filename,char *extension);
 extern void util_get_file_no_directory(char *filename,char *file_no_dir);
@@ -53,7 +61,11 @@ extern void open_sharedfile(char *archivo,FILE **f);
 
 #define MAX_COMPILE_INFO_LENGTH 4096
 
-#define MAX_SIZE_CONFIG_FILE 65535
+//1000 parametros
+#define MAX_PARAMETERS_CONFIG_FILE 1000
+
+//128 kb
+#define MAX_SIZE_CONFIG_FILE 131072
 
 extern void get_compile_info(char *s);
 
@@ -251,7 +263,7 @@ enum util_teclas
 	UTIL_KEY_BACKSPACE,
 	UTIL_KEY_HOME,
 	UTIL_KEY_LEFT,
-	UTIL_KEY_RIGHT,
+	UTIL_KEY_RIGHT,   
 	UTIL_KEY_DOWN,
 	UTIL_KEY_UP,
 	UTIL_KEY_TAB,
@@ -292,7 +304,14 @@ enum util_teclas
 	UTIL_KEY_KP9,
 	UTIL_KEY_KP_COMMA,
 	UTIL_KEY_KP_ENTER,
-	UTIL_KEY_WINKEY
+	UTIL_KEY_WINKEY,
+
+	//Estos 5 son para enviar eventos de joystick mediante ZENG
+	UTIL_KEY_JOY_FIRE,
+	UTIL_KEY_JOY_UP,
+	UTIL_KEY_JOY_DOWN,
+	UTIL_KEY_JOY_LEFT,
+	UTIL_KEY_JOY_RIGHT
 };
 
 //valores usados en funcion util_set_reset_key_z88_keymap
@@ -371,7 +390,10 @@ extern void util_set_reset_key_cpc_keymap(enum util_teclas_cpc_keymap tecla,int 
 extern void util_set_reset_key_chloe_keymap(enum util_teclas_chloe_keymap tecla,int pressrelease);
 extern void util_set_reset_key_common_keymap(enum util_teclas_common_keymap tecla,int pressrelease);
 
+
+
 extern unsigned int parse_string_to_number(char *texto);
+extern unsigned int parse_string_to_number_get_type(char *texto,enum token_parser_formato *tipo_valor);
 
 //#define TMPDIR_BASE "/tmp/zesarux"
 
@@ -385,6 +407,7 @@ extern int convert_wav_to_rwa_tmpdir(char *origen, char *destino);
 
 extern int convert_tzx_to_rwa(char *origen, char *destino);
 extern int convert_tzx_to_rwa_tmpdir(char *origen, char *destino);
+//extern int convert_tzx_to_wav(char *origen, char *destino);
 
 extern int convert_o_to_rwa(char *origen, char *destino);
 extern int convert_o_to_rwa_tmpdir(char *origen, char *destino);
@@ -394,11 +417,16 @@ extern int convert_p_to_rwa_tmpdir(char *origen, char *destino);
 
 extern int convert_tap_to_rwa_tmpdir(char *origen, char *destino);
 extern int convert_tap_to_rwa(char *origen, char *destino);
+//extern int convert_tap_to_wav(char *origen, char *destino);
 
+extern int convert_any_to_wav(char *origen, char *destino);
+
+extern int convert_hdf_to_raw(char *origen, char *destino);
 
 extern z80_bit quickload_guessing_tzx_type;
 
 extern int load_binary_file(char *binary_file_load,int valor_leido_direccion,int valor_leido_longitud);
+extern int save_binary_file(char *filename,int valor_leido_direccion,int valor_leido_longitud);
 extern void parse_customfile_options(void);
 extern void parse_custom_file_config(char *archivo);
 
@@ -421,7 +449,7 @@ extern int si_ruta_absoluta(char *ruta);
 extern int get_file_type(int d_type, char *nombre);
 
 extern char external_tool_sox[];
-extern char external_tool_unzip[];
+//extern char external_tool_unzip[];
 extern char external_tool_gunzip[];
 extern char external_tool_tar[];
 extern char external_tool_unrar[];
@@ -516,6 +544,37 @@ struct s_tecla_redefinida
 
 typedef struct s_tecla_redefinida tecla_redefinida;
 
+
+//Tabla para subzonas. Se usa en array y un elemento de 0,0,"" indica el ultimo elemento
+struct s_subzone_info
+{
+	int inicio;
+	int fin;
+	char nombre[33];
+};
+
+typedef struct s_subzone_info subzone_info;
+
+
+//Tabla para guardar configuracion de geometria de ventanas
+struct s_saved_config_window_geometry 
+{
+	char nombre[MAX_NAME_WINDOW_GEOMETRY];
+	int x,y,ancho,alto;
+};
+
+typedef struct s_saved_config_window_geometry saved_config_window_geometry;
+
+extern int total_config_window_geometry;
+
+extern int util_find_window_geometry(char *nombre,int *x,int *y,int *ancho,int *alto);
+extern int util_add_window_geometry(char *nombre,int x,int y,int ancho,int alto);
+
+extern void util_add_window_geometry_compact(zxvision_window *ventana);
+
+extern void util_clear_all_windows_geometry(void);
+
+
 #define MAX_TECLAS_REDEFINIDAS 10
 extern tecla_redefinida lista_teclas_redefinidas[];
 
@@ -528,18 +587,23 @@ extern void clear_lista_teclas_redefinidas(void);
 
 extern void util_set_reset_key_continue(enum util_teclas tecla,int pressrelease);
 
+extern void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrelease);
+
 extern void convert_numeros_letras_puerto_teclado_continue(z80_byte tecla,int pressrelease);
 
-extern int timer_on_screen_key;
 
 
 extern int util_tape_tap_get_info(z80_byte *tape,char *texto);
 
-#define ZESARUX_CONFIG_FILE ".zesaruxrc"
+#define DEFAULT_ZESARUX_CONFIG_FILE ".zesaruxrc"
+
+extern char *customconfigfile;
 
 extern void get_machine_config_name_by_number(char *machine_name,int machine_number);
 
 extern int util_write_configfile(void);
+
+extern int util_create_sample_configfile(int additional);
 
 extern z80_bit save_configuration_file_on_exit;
 
@@ -566,11 +630,14 @@ extern int si_menu_mouse_activado(void);
 
 extern int util_parse_commands_argvc(char *texto, char *parm_argv[], int maximo);
 
+extern int util_parse_commands_argvc_comillas(char *texto, char *parm_argv[], int maximo);
+
 extern int get_machine_id_by_name(char *machine_name);
 
 extern void util_truncate_file(char *filename);
 
 extern int util_write_pbm_file(char *archivo, int ancho, int alto, int ppb, z80_byte *source);
+extern int util_write_sprite_c_file(char *archivo, int ancho, int alto, int ppb, z80_byte *source);
 
 extern int get_file_type_from_stat(struct stat *f);
 
@@ -589,6 +656,8 @@ extern z80_byte *machine_get_memory_zone_pointer(int zone, int address);
 extern unsigned int machine_get_memory_zone_attrib(int zone, int *readwrite);
 extern void machine_get_memory_zone_name(int zone, char *name);
 extern int machine_get_next_available_memory_zone(int zone);
+extern void machine_get_memory_subzone_name(int zone, int machine_id, int address, char *name);
+extern subzone_info *machine_get_memory_subzone_array(int zone, int machine_id);
 
 extern void util_delete(char *filename);
 
@@ -610,6 +679,9 @@ extern int find_sharedfile(char *archivo,char *ruta_final);
 extern int si_existe_editionnamegame(char *nombre_final);
 
 extern int util_extract_mdv(char *mdvname, char *dest_dir);
+extern int util_extract_hdf(char *hdfname, char *dest_dir);
+
+extern void util_save_file(z80_byte *origin, long int tamanyo_origen, char *destination_file);
 
 extern void util_string_replace_char(char *s,char orig,char dest);
 
@@ -621,7 +693,9 @@ extern void util_binary_to_ascii(z80_byte *origen, char *destino, int longitud_m
 
 extern void util_tape_get_info_tapeblock(z80_byte *tape,z80_byte flag,z80_int longitud,char *texto);
 
-extern void util_file_save(char *filename,z80_byte *puntero, int tamanyo);
+extern void util_ascii_to_binary(int valor_origen,char *destino,int longitud_max);
+
+//extern void util_file_save(char *filename,z80_byte *puntero, long int tamanyo);
 
 extern int util_get_byte_repetitions(z80_byte *memoria,int longitud,z80_byte *byte_repetido);
 
@@ -643,5 +717,172 @@ extern unsigned int util_if_open_just_menu_initial_counter;
 extern void util_convert_scr_sprite(z80_byte *origen,z80_byte *destino);
 
 extern int util_get_absolute(int valor);
+
+extern int util_get_sign(int valor);
+
+extern int input_file_keyboard_is_playing(void);
+
+extern z80_bit input_file_keyboard_playing;
+
+extern void convert_to_rwa_common_tmp(char *origen, char *destino);
+
+extern void util_tape_get_name_header(z80_byte *tape,char *texto);
+
+extern int util_extract_tap(char *filename,char *tempdir,char *tzxfile);
+
+extern int util_extract_p(char *filename,char *tempdir);
+
+extern int util_extract_o(char *filename,char *tempdir);
+
+extern int util_extract_tzx(char *filename,char *tempdir,char *tapfile);
+
+extern int util_extract_pzx(char *filename,char *tempdir,char *tapfile);
+
+extern int util_extract_trd(char *filename,char *tempdir);
+
+extern void util_file_append(char *filename,z80_byte *puntero, int tamanyo);
+
+extern int util_extract_dsk(char *filename,char *tempdir);
+
+extern int util_extract_z88_card(char *filename,char *tempdir);
+
+extern int file_is_z88_basic(char *filename);
+
+extern void util_save_game_config(char *filename);
+
+extern void util_add_text_adventure_kdb(char *texto);
+
+extern void util_clear_text_adventure_kdb(void);
+
+extern int util_paws_dump_vocabulary(int *p_quillversion);
+
+extern char *quillversions_strings[];
+
+extern int util_gac_dump_dictonary(int *p_gacversion);
+
+extern char *gacversions_strings[];
+
+extern int util_unpawsetc_dump_words(char *mensaje);
+
+extern int util_is_digit(char c);
+
+extern int util_get_available_drives(char *texto);
+
+extern int get_cpu_frequency(void);
+
+extern int util_daad_detect(void);
+extern int util_paws_detect(void);
+extern z80_int util_daad_get_start_vocabulary(void);
+extern int util_daad_dump_vocabulary(int tipo,char *texto,int max_string);
+
+extern int util_daad_get_limit_objects(void);
+extern int util_daad_get_limit_flags(void);
+
+extern int util_undaad_unpaws_is_quill(void);
+
+
+extern z80_byte util_daad_get_flag_value(z80_byte index);
+
+extern void util_daad_locate_word(z80_byte numero_palabra_buscar,z80_byte tipo_palabra_buscar,char *texto_destino);
+extern void util_daad_paws_locate_word(z80_byte numero_palabra_buscar,z80_byte tipo_palabra_buscar,char *texto_destino);
+extern int util_paws_dump_vocabulary_tostring(int tipo,char *texto,int max_string);
+extern void util_paws_locate_word(z80_byte numero_palabra_buscar,z80_byte tipo_palabra_buscar,char *texto_destino);
+
+extern z80_byte util_daad_get_object_value(z80_byte index);
+
+extern void util_daad_put_flag_value(z80_byte index,z80_byte value);
+extern void util_daad_put_object_value(z80_byte index,z80_byte value);
+
+extern z80_int util_daad_get_start_objects_names(void);
+extern z80_int util_daad_get_num_objects_description(void);
+
+extern void util_daad_get_object_description(z80_byte index,char *texto);
+
+extern int util_concat_string(char *original,char *string_to_add,int limite);
+
+extern int util_daad_is_in_parser(void);
+
+extern void util_daad_get_message_table_lookup(z80_byte index,z80_int table_dir,char *texto,int limite_mensajes);
+
+extern void util_daad_get_compressed_message(z80_byte index,char *texto);
+
+extern z80_int util_daad_get_num_user_messages(void);
+extern z80_int util_daad_get_num_sys_messages(void);
+extern z80_int util_daad_get_num_locat_messages(void);
+
+extern void util_daad_get_user_message(z80_byte index,char *texto);
+extern void util_daad_get_sys_message(z80_byte index,char *texto);
+extern void util_daad_get_locat_message(z80_byte index,char *texto);
+
+extern int util_daad_condact_uses_message(void);
+
+extern void util_daad_get_condact_message(char *buffer);
+
+extern z80_byte daad_peek(z80_int dir);
+extern void daad_poke(z80_int dir,z80_byte value);
+extern z80_int util_daad_get_pc_parser(void);
+extern z80_int util_paws_get_pc_parser(void); 
+
+#define MEMORY_ZONE_NUM_FILE_ZONE 16
+#define MEMORY_ZONE_NUM_TBBLUE_COPPER 17 
+#define MEMORY_ZONE_NUM_TIMEX_EX 18
+#define MEMORY_ZONE_NUM_TIMEX_DOCK 19
+
+#define MEMORY_ZONE_NUM_DAAD_CONDACTS 20
+#define MEMORY_ZONE_NUM_PAWS_CONDACTS 21
+#define MEMORY_ZONE_DEBUG 22
+#define MEMORY_ZONE_IFROM 23
+
+#define DAAD_PARSER_BREAKPOINT_PC_SPECTRUM 0x617c
+
+#define DAAD_PARSER_BREAKPOINT_PC_CPC 0x09b4 
+//0x14df
+
+#define DAAD_PARSER_CONDACT_BREAKPOINT 220
+
+#define PAWS_LONGITUD_PALABRAS 5
+#define QUILL_LONGITUD_PALABRAS 4
+
+extern char *util_unpaws_get_parser_name(void);
+extern char *util_undaad_unpaws_get_parser_name(void);
+extern int util_paws_is_in_parser(void);
+
+extern void util_str_add_char(char *texto,int posicion,char letra);
+extern void util_str_del_char(char *texto,int posicion);
+extern int get_file_lines(char *filename);
+
+extern char util_printable_char(char c);
+
+extern char *util_read_line(char *origen,char *destino,int size_orig,int max_size_dest,int *leidos);
+extern void util_normalize_name(char *texto);
+extern int util_download_file(char *hostname,char *url,char *archivo,int use_ssl,int estimated_maximum_size);
+extern void util_normalize_query_http(char *orig,char *dest);
+
+extern int util_extract_scl(char *sclname, char *dest_dir);
+extern int util_extract_zip(char *zipname, char *dest_dir);
+
+extern void util_get_host_url(char *url, char *host);
+extern void util_get_url_no_host(char *url, char *url_no_host);
+extern int util_url_is_https(char *url);
+
+extern char util_return_valid_ascii_char(char c);
+
+extern int convert_pzx_to_rwa_tmpdir(char *origen, char *destino);
+extern int convert_pzx_to_rwa(char *origen, char *destino);
+
+#define PZX_CURRENT_MAJOR_VERSION 1
+#define PZX_CURRENT_MINOR_VERSION 0
+
+extern int convert_scr_to_tap(char *origen, char *destino);
+
+extern z80_byte get_memory_checksum_spectrum(z80_byte crc,z80_byte *origen,int longitud);
+
+extern void util_store_value_little_endian(z80_byte *destination,z80_int value);
+
+extern z80_int util_get_value_little_endian(z80_byte *origin);
+
+extern void util_get_home_dir(char *homedir);
+
+extern void util_write_screen_bmp(char *archivo);
 
 #endif

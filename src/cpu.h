@@ -41,15 +41,15 @@ Examples
 
 */
 
-//#define EMULATOR_VERSION "7.0"
+//#define EMULATOR_VERSION "8.2"
 
-#define EMULATOR_VERSION "7.0-RC"
-//#define EMULATOR_VERSION "7.0-SN"
+#define EMULATOR_VERSION "8.2-SN"
+//#define EMULATOR_VERSION "8.2-RC"
 #define SNAPSHOT_VERSION
 
-#define EMULATOR_DATE "19 April 2018"
-#define EMULATOR_SHORT_DATE "19/04/2018"
-#define EMULATOR_GAME_EDITION "Xeno"
+#define EMULATOR_DATE "16 March 2020"
+#define EMULATOR_SHORT_DATE "16/03/2020"
+#define EMULATOR_GAME_EDITION "xxx"
 #define EMULATOR_EDITION_NAME EMULATOR_GAME_EDITION " edition"
 
 //8 bits
@@ -148,12 +148,18 @@ extern z80_byte Z80_FLAGS_SHADOW;
 
 extern z80_int memptr;
 
+extern z80_byte scf_ccf_undoc_flags_before;
+extern int scf_ccf_undoc_flags_after_changed;
+
 extern z80_bit iff1,iff2;
 
 extern z80_bit interrupcion_pendiente;
 extern z80_bit z80_ejecutando_halt;
 extern z80_byte im_mode;
 extern z80_bit cpu_step_mode;
+extern int core_refetch;
+extern int cpu_duracion_pulso_interrupcion;
+extern z80_bit core_end_frame_check_zrcp_zeng_snap;
 
 #ifndef GCC_UNUSED
 
@@ -259,6 +265,8 @@ extern z80_byte reg_r_antes_zx8081;
 extern z80_bit temp_zx8081_lineasparimpar;
 extern char *get_machine_name(z80_byte m);
 
+extern z80_bit cpu_random_r_register;
+
 extern int porcentaje_velocidad_emulador;
 extern void set_emulator_speed(void);
 
@@ -277,6 +285,7 @@ extern z80_bit autoselect_snaptape_options;
 extern z80_bit tape_loading_simulate;
 extern z80_bit tape_loading_simulate_fast;
 extern void end_emulator(void);
+extern void end_emulator_saveornot_config(int saveconfig);
 
 extern z80_bit snow_effect_enabled;
 
@@ -343,6 +352,7 @@ extern z80_bit stdout_simpletext_automatic_redraw;
 #define MACHINE_ID_Z88				130
 
 #define MACHINE_ID_CPC_464			140
+#define MACHINE_ID_CPC_4128			141
 #define MACHINE_ID_SAM				150
 #define MACHINE_ID_QL_STANDARD			160
 #define MACHINE_ID_MK14_STANDARD		180
@@ -393,6 +403,7 @@ extern z80_bit stdout_simpletext_automatic_redraw;
 #define MACHINE_IS_Z88 (current_machine_type==MACHINE_ID_Z88)
 
 #define MACHINE_IS_CPC_464 (current_machine_type==MACHINE_ID_CPC_464)
+#define MACHINE_IS_CPC_4128 (current_machine_type==MACHINE_ID_CPC_4128)
 #define MACHINE_IS_CPC (current_machine_type>=MACHINE_ID_CPC_464 && current_machine_type<=149)
 #define MACHINE_IS_SAM (current_machine_type==MACHINE_ID_SAM)
 
@@ -421,11 +432,24 @@ extern z80_bit stdout_simpletext_automatic_redraw;
 extern int machine_emulate_memory_refresh;
 extern int machine_emulate_memory_refresh_counter;
 
+extern z80_bit cpu_ldir_lddr_hack_optimized;
+
 extern z80_byte last_inves_low_ram_poke_menu;
 
 extern void random_ram_inves(z80_byte *puntero,int longitud);
 
+//Tipos de CPU Z80
+#define TOTAL_Z80_CPU_TYPES 3
+enum z80_cpu_types
+{
+  Z80_TYPE_GENERIC,
+  Z80_TYPE_MOSTEK,
+  Z80_TYPE_CMOS
+};
 
+extern enum z80_cpu_types z80_cpu_current_type;
+
+extern char *z80_cpu_types_strings[];
 
 //valor obtenido probando
 #define MAX_EMULATE_MEMORY_REFRESH_COUNTER 1500000
@@ -488,6 +512,10 @@ extern z80_bit core_spectrum_uses_reduced;
 
 
 extern char parameter_disablebetawarning[];
+
+extern int total_minutes_use;
+
+extern char macos_path_to_executable[];
 
 
 #endif

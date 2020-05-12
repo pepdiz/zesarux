@@ -47,16 +47,16 @@ extern int joystick_autofire_counter;
 
 extern char *joystick_texto[];
 
-extern void joystick_set_right(void);
-extern void joystick_release_right(void);
-extern void joystick_set_left(void);
-extern void joystick_release_left(void);
-extern void joystick_set_down(void);
-extern void joystick_release_down(void);
-extern void joystick_set_up(void);
-extern void joystick_release_up(void);
-extern void joystick_set_fire(void);
-extern void joystick_release_fire(void);
+extern void joystick_set_right(int si_enviar_zeng_event);
+extern void joystick_release_right(int si_enviar_zeng_event);
+extern void joystick_set_left(int si_enviar_zeng_event);
+extern void joystick_release_left(int si_enviar_zeng_event);
+extern void joystick_set_down(int si_enviar_zeng_event);
+extern void joystick_release_down(int si_enviar_zeng_event);
+extern void joystick_set_up(int si_enviar_zeng_event);
+extern void joystick_release_up(int si_enviar_zeng_event);
+extern void joystick_set_fire(int si_enviar_zeng_event);
+extern void joystick_release_fire(int si_enviar_zeng_event);
 
 extern int gunstick_emulation;
 
@@ -82,12 +82,16 @@ extern int gunstick_range_x,gunstick_range_y,gunstick_y_offset,gunstick_solo_bri
 
 
 extern int mouse_x,mouse_y;
+extern int mouse_wheel_vertical,mouse_wheel_horizontal;
 extern z80_bit kempston_mouse_emulation;
-extern int mouse_left,mouse_right;
+extern int mouse_left,mouse_right,mouse_pressed_close_window,mouse_pressed_background_window;
 
 extern z80_byte kempston_mouse_x,kempston_mouse_y;
 
 extern void joystick_print_types(void);
+
+extern void joystick_cycle_next_type(void);
+
 
 
 #endif

@@ -34,7 +34,10 @@
 #include "zxevo.h"
 
 //temporal para printf debug que mira contador_segundo
-#include "timer.h"
+//#include "timer.h"
+
+#include "chardevice.h"
+#include "uartbridge.h"
 
 
 void tsconf_generate_im1_im2(z80_byte vector);
@@ -184,6 +187,53 @@ z80_bit tsconf_force_disable_layer_sprites_one={0};
 z80_bit tsconf_force_disable_layer_sprites_two={0};
 z80_bit tsconf_force_disable_layer_border={0};
 
+
+//Forzar a dibujar capa con color fijo, para debug
+z80_bit tsconf_reveal_layer_ula={0};
+z80_bit tsconf_reveal_layer_sprites_zero={0};
+z80_bit tsconf_reveal_layer_sprites_one={0};
+z80_bit tsconf_reveal_layer_sprites_two={0};
+
+z80_bit tsconf_reveal_layer_tiles_zero={0};
+z80_bit tsconf_reveal_layer_tiles_one={0};
+
+
+void tsconf_reveal_layer_draw(z80_int *layer)
+{
+	int i;
+
+	for (i=0;i<TSCONF_MAX_WIDTH_LAYER;i++) {
+		z80_int color=*layer;
+	
+		if (color!=TSCONF_SCANLINE_TRANSPARENT_COLOR) {
+
+			//Color de revelado es blanco o negro segun cuadricula:
+			// Negro Blanco Negro ...
+			// Blanco Negro Blanco ...
+			// Negro Blanco Negro ....
+			// .....
+
+			//Por tanto tener en cuenta posicion x e y
+			int posx=i&1;
+			int posy=t_scanline_draw&1;
+
+			//0,0: 0
+			//0,1: 1
+			//1,0: 1
+			//1,0: 0
+			//Es un xor
+
+			int si_blanco_negro=posx ^ posy;
+
+			*layer=32767*si_blanco_negro; //ultimo de los colores en paleta rgb9 de tbblue -> blanco, negro es 0
+		}
+
+		layer++;
+	}
+}
+
+
+
 //Prueba ny17: Todo activado: 71-73 %
 //Sin ula: 66%
 //Sin sprites: 70%
@@ -288,7 +338,7 @@ void tsconf_splash_video_size_mode_change(void)
   tsconf_get_current_video_mode(buffer_mensaje2);
   sprintf (buffer_mensaje,"Setting video mode %s",buffer_mensaje2);
 
-  screen_print_splash_text(10,ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,buffer_mensaje);
+  screen_print_splash_text_center(ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,buffer_mensaje);
 }
 
 
@@ -891,7 +941,7 @@ mis opciones:
 
         */
 
-        if (tsconf_vdac_with_pwm.v) return 7;
+        if (tsconf_vdac_with_pwm.v==0) return 7;
         else return 0;
 
       break;
@@ -1283,8 +1333,7 @@ z80_byte tsconf_rgb_5_to_8(z80_byte color)
 	if (tsconf_vdac_with_pwm.v==0) return color*8;  //5 bits: 0..31. max valor 31*8=248
 
 
-	//con pwm
-//Si se usa vdac con full 15 bits, o sin vdac: en ese caso, cada componente de 5 bits son diferentes hasta valor 24, a partir de ahi son iguales a 255:
+	//con pwm cada componente de 5 bits son diferentes hasta valor 24, a partir de ahi son iguales a 255:
 /*
 0  1   2    3   4  5   6   7   8   9   10   11    12  13   14   15   16   17   18   19   20   21   22   23   24
 0, 10, 21, 31, 42, 53, 63, 74, 85, 95, 106, 117, 127, 138, 149, 159, 170, 181, 191, 202, 213, 223, 234, 245, 255,
@@ -1508,14 +1557,7 @@ void tsconf_store_scanline_border_supinf_izqder(int tipo)
                 }
 		}
 
-        //laterales
-        /*for (y=0;y<tsconf_current_pixel_height;y++) {
-                for (x=0;x<tsconf_current_border_width;x++) {
-                        scr_tsconf_putpixel_zoom_border(x,y+tsconf_current_border_height,color);
-                        scr_tsconf_putpixel_zoom_border(x+tsconf_current_border_width+tsconf_current_pixel_width,y+tsconf_current_border_height,color);
-                }
-
-        }*/
+ 
 
 }
 
@@ -2389,7 +2431,12 @@ void screen_store_scanline_rainbow_solo_display_tsconf(void)
 
   //Dibujamos las capas
 	//Capa ULA
-	if (tsconf_if_ula_enabled() && tsconf_force_disable_layer_ula.v==0) tsconf_store_scanline_ula();
+	if (tsconf_if_ula_enabled() && tsconf_force_disable_layer_ula.v==0) {
+		tsconf_store_scanline_ula();
+				if (tsconf_reveal_layer_ula.v) {
+								tsconf_reveal_layer_draw(tsconf_layer_ula);
+				}
+	}
 
 
 //Si estamos en zona de superior o inferior, ni sprites ni tiles
@@ -2416,30 +2463,60 @@ int spritestiles=1;
 	  //if (tsconfig&128) {
 	  if (tsconf_if_sprites_enabled() ) {
         //printf ("Sprite layers enable ");
-        if (tsconf_force_disable_layer_sprites_zero.v==0) tsconf_store_scanline_sprites(0);
-		if (tsconf_force_disable_layer_sprites_one.v==0) tsconf_store_scanline_sprites(1);
-		if (tsconf_force_disable_layer_sprites_two.v==0) tsconf_store_scanline_sprites(2);
-	  }
+        if (tsconf_force_disable_layer_sprites_zero.v==0) {
+					tsconf_store_scanline_sprites(0);
+					if (tsconf_reveal_layer_sprites_zero.v) {
+								tsconf_reveal_layer_draw(tsconf_layer_sprites_zero);
+					}
+				}
+
+			if (tsconf_force_disable_layer_sprites_one.v==0) {
+			tsconf_store_scanline_sprites(1);
+					if (tsconf_reveal_layer_sprites_one.v) {
+								tsconf_reveal_layer_draw(tsconf_layer_sprites_one);
+					}
+			} 
+
+			if (tsconf_force_disable_layer_sprites_two.v==0) {
+			tsconf_store_scanline_sprites(2);
+					if (tsconf_reveal_layer_sprites_two.v) {
+								tsconf_reveal_layer_draw(tsconf_layer_sprites_two);
+					}
+	  	}
+
+		}
+
+
 
 	  //if (tsconfig&32) {
 	  if (tsconf_if_tiles_zero_enabled() ) {
 			//printf ("Tile layer 0 enable- ");
-		  if (tsconf_force_disable_layer_tiles_zero.v==0) tsconf_store_scanline_tiles(0,tsconf_layer_tiles_zero);
+		  if (tsconf_force_disable_layer_tiles_zero.v==0) {
+				tsconf_store_scanline_tiles(0,tsconf_layer_tiles_zero);
+					if (tsconf_reveal_layer_tiles_zero.v) {
+								tsconf_reveal_layer_draw(tsconf_layer_tiles_zero);
+					}				
+			}
 	 }
-
 
 
 
 	  //if (tsconfig&64) {
 	  if (tsconf_if_tiles_one_enabled() ) {
         	//printf ("Tile layer 1 enable- ");
-	    if (tsconf_force_disable_layer_tiles_one.v==0) tsconf_store_scanline_tiles(1,tsconf_layer_tiles_one);
+	    if (tsconf_force_disable_layer_tiles_one.v==0) {
+				tsconf_store_scanline_tiles(1,tsconf_layer_tiles_one);
+					if (tsconf_reveal_layer_tiles_one.v) {
+								tsconf_reveal_layer_draw(tsconf_layer_tiles_one);
+					}						
+			}
 	  }
 
 
   	}
   }
 
+	
 
 
 
@@ -2955,7 +3032,7 @@ void screen_tsconf_refresca_pantalla(void)
 
 	else {
 	//modo rainbow - real video
-        //if (tsconf_si_render_spritetile_rapido.v) tsconf_fast_tilesprite_render();
+       
 
         screen_tsconf_refresca_rainbow();
 	}
@@ -3141,3 +3218,75 @@ void tsconf_set_emulador_settings(void)
   
   
 }
+
+
+z80_byte tsconf_zifi_read_data_reg(void)
+{
+	
+	return uartbridge_readdata();
+}
+
+
+void tsconf_zifi_write_data_reg(z80_byte value)
+{
+
+	
+	uartbridge_writedata(value);
+
+
+}
+
+z80_byte tsconf_zifi_read_error_reg(void)
+{
+	//TODO: Ni idea que retornar
+	
+	return 0;
+}
+
+void tsconf_zifi_write_command_reg(z80_byte value)
+{
+	//TODO: Ni idea que hacer con esto, aparentemente altera la fifo de conexion con la wifi
+	value=1; //Para que no se queje el compilador
+	value++; 
+}
+
+
+z80_byte tsconf_zifi_read_input_fifo_status(void)
+{
+
+	
+
+	//No dispositivo abierto
+	if (!uartbridge_available()) return 0;
+
+	
+	int status=chardevice_status(uartbridge_handler);
+	
+
+	z80_byte status_retorno=0;
+
+	if (status & CHDEV_ST_RD_AVAIL_DATA) status_retorno |= 1;
+	//0 - input FIFO is empty,
+
+	return status_retorno;
+}
+
+
+z80_byte tsconf_zifi_read_output_fifo_status(void)
+{
+	//printf ("tsconf_zifi_read_output_fifo_status\n");
+
+	//0 - output FIFO is full
+	return 1;
+}
+
+z80_byte temp_valor_puerto_57;
+
+z80_byte tsconf_read_port_57(void)
+{
+	//TODO: ni idea. demo zifi espera que sea FFH
+	//printf ("PC=%04XH\n",reg_pc);
+	temp_valor_puerto_57++;
+	return temp_valor_puerto_57;	
+}
+

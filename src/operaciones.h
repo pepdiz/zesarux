@@ -35,6 +35,9 @@
 
 #ifdef EMULATE_VISUALMEM
 
+#define VISUALMEM_MMC_BUFFER_SIZE (1024*1024)
+
+
 extern z80_byte *visualmem_buffer;
 extern z80_byte *visualmem_read_buffer;
 extern z80_byte *visualmem_opcode_buffer;
@@ -49,6 +52,14 @@ extern void clear_visualmemopcodebuffer(int dir);
 
 extern void set_visualmemreadbuffer(int dir);
 extern void clear_visualmemreadbuffer(int dir);
+
+extern z80_byte *visualmem_mmc_read_buffer;
+extern void set_visualmemmmc_read_buffer(int dir);
+extern void clear_visualmemmmc_read_buffer(int dir);
+
+extern z80_byte *visualmem_mmc_write_buffer;
+extern void set_visualmemmmc_write_buffer(int dir);
+extern void clear_visualmemmmc_write_buffer(int dir);
 
 
 #endif
@@ -121,17 +132,11 @@ extern z80_byte sz53p_table[];
         reg_pc +=desp16; \
 } \
 
-/*
-#define call_address(dir) \
-{ \
-        push_valor(reg_pc); \
-        reg_pc=dir; \
-} \
-*/
+
 
 #define rst(dir)\
 {\
-        push_valor(reg_pc); \
+        push_valor(reg_pc,PUSH_VALUE_TYPE_RST); \
         reg_pc=dir; \
 } \
 
@@ -143,7 +148,7 @@ extern z80_byte sz53p_table[];
   calltemph=peek_byte(reg_pc); \
   contend_read_no_mreq(reg_pc, 1 );  \
   reg_pc++;\
-  push_valor(reg_pc); \
+  push_valor(reg_pc,PUSH_VALUE_TYPE_CALL); \
   reg_pc=value_8_to_16(calltemph,calltempl); \
   set_memptr(reg_pc); \
 } \
@@ -199,6 +204,16 @@ extern void init_cpu_tables(void);
 //extern void set_flags_rld_rrd(z80_byte rh,z80_byte rl);
 extern void set_flags_in_reg(z80_byte value);
 
+extern void cpu_common_jump_im01(void);
+
+extern z80_byte peek_byte_vacio(z80_int dir GCC_UNUSED);
+extern void poke_byte_vacio(z80_int dir GCC_UNUSED,z80_byte valor GCC_UNUSED);
+extern z80_byte lee_puerto_vacio(z80_byte puerto_h GCC_UNUSED,z80_byte puerto_l GCC_UNUSED);
+extern void out_port_vacio(z80_int puerto GCC_UNUSED,z80_byte value GCC_UNUSED);
+extern z80_byte fetch_opcode_vacio(void);
+
+
+
 extern void (*poke_byte)(z80_int dir,z80_byte valor);
 extern void (*poke_byte_no_time)(z80_int dir,z80_byte valor);
 extern z80_byte (*peek_byte)(z80_int dir);
@@ -216,6 +231,7 @@ extern void poke_byte_spectrum_48k(z80_int dir,z80_byte valor);
 
 extern z80_byte chardetect_automatic_poke_byte(z80_int dir,z80_byte valor);
 
+extern z80_byte lee_puerto_spectrum_no_time(z80_byte puerto_h,z80_byte puerto_l);
 
 extern void poke_byte_spectrum_128k(z80_int dir,z80_byte valor);
 extern void poke_byte_spectrum_128kp2a(z80_int dir,z80_byte valor);
@@ -340,12 +356,25 @@ extern z80_byte sub_value(z80_byte value);
 extern z80_int desp8_to_16(z80_byte desp);
 extern void neg(void);
 
-//extern void push_valor(z80_int valor);
-#define push_valor(valor) \
-{ \
-        reg_sp -=2; \
-        poke_word(reg_sp,valor); \
-} \
+
+#define TOTAL_PUSH_VALUE_TYPES 6
+
+enum push_value_type {
+	PUSH_VALUE_TYPE_DEFAULT=0,
+	PUSH_VALUE_TYPE_CALL,
+	PUSH_VALUE_TYPE_RST,
+	PUSH_VALUE_TYPE_PUSH,
+	PUSH_VALUE_TYPE_MASKABLE_INTERRUPT,
+        PUSH_VALUE_TYPE_NON_MASKABLE_INTERRUPT
+};
+
+extern char *push_value_types_strings[];
+
+
+
+extern void (*push_valor)(z80_int valor,z80_byte tipo); 
+
+extern void push_valor_default(z80_int valor,z80_byte tipo) ;
 
 extern z80_int pop_valor();
 

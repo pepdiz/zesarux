@@ -31,6 +31,8 @@
 #include "menu.h"
 #include "screen.h"
 #include "divmmc.h"
+#include "compileoptions.h"
+#include "operaciones.h"
 
 
 //valores temporales
@@ -132,6 +134,14 @@ int mmc_card_selected=0;
 z80_bit mmc_write_protection={0};
 
 
+//Si archivo mmc insertado es de tipo hdf
+z80_bit mmc_file_inserted_hdf={0};
+
+//Tamaño cabecera hdf
+z80_int mmc_file_header_hdf_size;
+
+//Puntero a cabecera hdf
+z80_byte *mmc_file_header_hdf_pointer=NULL;
 
 //Si cambios en escritura se hace flush a disco
 z80_bit mmc_persistent_writes={1};
@@ -180,7 +190,18 @@ void mmc_flush_flash_to_disk(void)
         size=mmc_size;
 
 
+
+
+
         if (ptr_mmcfile!=NULL) {
+
+		//Si tiene cabecera hdf, grabarla
+		if (mmc_file_inserted_hdf.v) {
+			debug_printf (VERBOSE_DEBUG,"Writing hdf header");
+			fwrite(mmc_file_header_hdf_pointer,1,mmc_file_header_hdf_size,ptr_mmcfile);
+			debug_printf (VERBOSE_DEBUG,"Writing hdf data");
+		}
+
                 z80_byte *puntero;
                 puntero=mmc_memory_pointer;
 
@@ -219,9 +240,22 @@ int mmc_read_file_to_memory(void)
   ptr_mmcfile=fopen(mmc_file_name,"rb");
 
 
+  unsigned int bytes_a_leer=mmc_size;
+
+
+  //mmc_file_inserted_hdf.v=1;
+
+
   if (ptr_mmcfile!=NULL) {
-          leidos=fread(mmc_memory_pointer,1,mmc_size,ptr_mmcfile);
-          fclose(ptr_mmcfile);
+
+	//Si tiene cabecera hdf, ignorarla
+	if (mmc_file_inserted_hdf.v) {
+		fseek(ptr_mmcfile,mmc_file_header_hdf_size,SEEK_SET);
+	}
+
+
+        leidos=fread(mmc_memory_pointer,1,bytes_a_leer,ptr_mmcfile);
+        fclose(ptr_mmcfile);
   }
 
   if (ptr_mmcfile==NULL) {
@@ -229,8 +263,8 @@ int mmc_read_file_to_memory(void)
   return 1;
   }
 
-  if (leidos!=mmc_size) {
-  debug_printf (VERBOSE_ERR,"Error reading mmc. Asked: %ld Read: %d",mmc_size,leidos);
+  if (leidos!=bytes_a_leer) {
+  debug_printf (VERBOSE_ERR,"Error reading mmc. Asked: %ld Read: %d",bytes_a_leer,leidos);
   return 1;
   }
 
@@ -291,6 +325,69 @@ void mmc_get_cmult(int *valor, z80_byte *valor_8_bits)
 	debug_printf (VERBOSE_DEBUG,"mmc_size: %ld cmult: %d (%d)",mmc_size,*valor_8_bits,*valor);
 }
 
+int mmc_read_hdf_header(void)
+{
+	unsigned char buffer_lectura[1024];
+
+
+        FILE *ptr_inputfile;
+        ptr_inputfile=fopen(mmc_file_name,"rb");
+
+        if (ptr_inputfile==NULL) {
+                debug_printf (VERBOSE_ERR,"Error opening %s",mmc_file_name);
+                return 1;
+        }
+
+
+
+	// Leer offset a datos raw del byte de cabecera:
+	//0x09 DOFS WORD Image data offset This is the absolute offset in the HDF file where the actual hard-disk data dump starts.
+	//In HDF version 1.1 this is 0x216.
+
+	//Leemos 10 bytes de la cabecera
+        fread(buffer_lectura,1,10,ptr_inputfile);
+
+	mmc_file_header_hdf_size=buffer_lectura[9]+256*buffer_lectura[10];
+
+	//printf ("Offset to raw data: %d\n",offset_raw);
+
+
+	//Leer desde el principio al buffer
+	fseek(ptr_inputfile,0,SEEK_SET);
+
+
+
+	//Si habia memoria asignada, desasignar
+	if (mmc_file_header_hdf_pointer!=NULL) free (mmc_file_header_hdf_pointer);
+	mmc_file_header_hdf_pointer=NULL;
+
+
+        mmc_file_header_hdf_pointer=malloc(mmc_file_header_hdf_size);
+        if (mmc_file_header_hdf_pointer==NULL) {
+                cpu_panic ("No enough memory for mmc emulation");
+        }
+
+   
+	unsigned int leidos=0;
+	debug_printf (VERBOSE_DEBUG,"Reading %d bytes of hdf header",mmc_file_header_hdf_size);
+
+          leidos=fread(mmc_file_header_hdf_pointer,1,mmc_file_header_hdf_size,ptr_inputfile);
+          fclose(ptr_inputfile);
+
+  if (leidos!=mmc_file_header_hdf_size) {
+  debug_printf (VERBOSE_ERR,"Error reading mmc header. Asked: %ld Read: %d",mmc_file_header_hdf_size,leidos);
+  return 1;
+  }
+
+  return 0;
+
+}
+
+
+
+
+
+
 void mmc_insert(void)
 {
 
@@ -310,6 +407,22 @@ void mmc_insert(void)
 	mmc_size=get_file_size(mmc_file_name);
 	debug_printf (VERBOSE_DEBUG,"mmc file size: %ld",mmc_size);
 
+	//Gestionar si archivo es tipo hdf
+	if (!util_compare_file_extension(mmc_file_name,"hdf")) {
+		debug_printf (VERBOSE_INFO,"File has hdf header");
+		if (mmc_read_hdf_header()) {
+			mmc_disable();
+                	return;	
+		}
+		mmc_size -=mmc_file_header_hdf_size;
+		mmc_file_inserted_hdf.v=1;
+	}
+
+	else {
+		mmc_file_inserted_hdf.v=0;
+	}
+
+
 	int sector_size;
 	z80_byte sector_size_8_bits;
 	mmc_get_sector_size(&sector_size,&sector_size_8_bits);
@@ -325,9 +438,9 @@ void mmc_insert(void)
 	unsigned long int resultado=mmc_size/multiple;
 	unsigned long int multiplicado=resultado*multiple;
 	if (multiplicado!=mmc_size) {
-		debug_printf (VERBOSE_ERR,"Error. File must be multiple of %d KB",multiple/1024);
-		mmc_disable();
-		return;
+		debug_printf (VERBOSE_ERR,"Error. MMC file should be multiple of %d KB. Use at your own risk!",multiple/1024);
+		//mmc_disable();
+		//return;
 	}
 
 	if (mmc_read_file()) {
@@ -465,6 +578,63 @@ void mmc_cs(z80_byte value)
 	debug_printf (VERBOSE_PARANOID,"Card selected: %d",mmc_card_selected);
 }
 
+
+//-1 si no aplica
+int mmc_get_visualmem_position(unsigned int address)
+{
+#ifdef EMULATE_VISUALMEM
+	if (mmc_size>0) {
+
+		unsigned long int address_l,mmc_size_l;
+
+		address_l=address;
+		mmc_size_l=mmc_size;
+
+		// Necesario hacerlo asi porque son numeros de 64 bits y si no, no va bien
+		// Basicamente ajustamos el valor de direccion al total de tamanyo de visualmem
+		// Seria (address/mmc_size) * visualmem_size
+		// la primera division es decimal, entre 0 y 1, por eso la realizo al final,
+		// multiplico antes y luego divido, asi puedo usar numeros enteros y no necesito decimales
+		unsigned long int posicion_final=(address_l*VISUALMEM_MMC_BUFFER_SIZE);
+
+		posicion_final /=mmc_size_l;
+
+		//por si acaso
+		if (posicion_final>=0 && posicion_final<VISUALMEM_MMC_BUFFER_SIZE) {
+				return posicion_final;
+				//printf ("add %d mmc_size %ld visualsize: %d final: %ld\n",address,mmc_size,VISUALMEM_MMC_BUFFER_SIZE,posicion_final);
+
+		}
+	}
+
+#endif
+
+	return -1;
+}
+
+
+void mmc_set_visualmem_read(unsigned int address)
+{
+#ifdef EMULATE_VISUALMEM
+	int posicion_final=mmc_get_visualmem_position(address);
+	if (posicion_final>=0) {
+		set_visualmemmmc_read_buffer(posicion_final);
+	}
+
+#endif
+}
+ 
+void mmc_set_visualmem_write(unsigned int address)
+{
+#ifdef EMULATE_VISUALMEM
+	int posicion_final=mmc_get_visualmem_position(address);
+	if (posicion_final>=0) {
+		set_visualmemmmc_write_buffer(posicion_final);
+	}
+
+#endif
+}
+ 
 z80_byte mmc_read_byte_memory(unsigned int address)
 {
 
@@ -476,7 +646,12 @@ z80_byte mmc_read_byte_memory(unsigned int address)
 		mmc_disable();
 		return 0;
 	}
-	else return mmc_memory_pointer[address];
+	else {
+		mmc_set_visualmem_read(address);
+
+
+		return mmc_memory_pointer[address];
+	}
 }
 
 void mmc_write_byte_memory(unsigned int address,z80_byte value)
@@ -495,6 +670,8 @@ void mmc_write_byte_memory(unsigned int address,z80_byte value)
 
 	mmc_memory_pointer[address]=value;
 	mmc_flash_must_flush_to_disk=1;
+
+	mmc_set_visualmem_write(address);
 }
 
 

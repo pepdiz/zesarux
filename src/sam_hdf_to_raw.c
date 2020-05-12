@@ -18,7 +18,7 @@ void main (void)
 	unsigned char *memoria;
 
 	//1 GB
-	memoria=malloc(1024*104*1024);
+	memoria=malloc(1024*1024*1024);
 
 	if (!memoria) {
 		printf ("Error allocating memory\n");

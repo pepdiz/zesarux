@@ -67,11 +67,18 @@ int simpletext_x_position=0;
 char buffer_tecla_comando[256];
 
 
+void scrsimpletext_putpixel_final_rgb(int x GCC_UNUSED,int y GCC_UNUSED,unsigned int color_rgb GCC_UNUSED)
+{
+}
+
+void scrsimpletext_putpixel_final(int x GCC_UNUSED,int y GCC_UNUSED,unsigned int color GCC_UNUSED)
+{
+}
 
 
 
 //Rutina de putchar para menu
-void scrsimpletext_putchar_menu(int x,int y, z80_byte caracter,z80_byte tinta,z80_byte papel)
+void scrsimpletext_putchar_menu(int x,int y, z80_byte caracter,int tinta,int papel)
 {
 	
 	//No escribimos nada. Este driver no soporta menu
@@ -83,7 +90,7 @@ void scrsimpletext_putchar_menu(int x,int y, z80_byte caracter,z80_byte tinta,z8
 	
 }
 
-void scrsimpletext_putchar_footer(int x,int y, z80_byte caracter,z80_byte tinta,z80_byte papel)
+void scrsimpletext_putchar_footer(int x,int y, z80_byte caracter,int tinta,int papel)
 {
 	
 	//Para evitar warnings al compilar de "unused parameter"
@@ -120,6 +127,23 @@ void scrsimpletext_detectedchar_print(z80_byte caracter)
 
 }
 
+//Estos valores no deben ser mayores de OVERLAY_SCREEN_MAX_WIDTH y OVERLAY_SCREEN_MAX_HEIGTH
+int scrsimpletext_get_menu_width(void)
+{
+        return 32;
+}
+
+
+int scrsimpletext_get_menu_height(void)
+{
+        return 24;
+}
+
+int scrsimpletext_driver_can_ext_desktop (void)
+{
+        return 0;
+}
+
 
 int scrsimpletext_init (void){ 
 	
@@ -134,6 +158,13 @@ int scrsimpletext_init (void){
 	
 	scr_putchar_menu=scrsimpletext_putchar_menu;
 	scr_putchar_footer=scrsimpletext_putchar_footer;
+
+	scr_putpixel_final=scrsimpletext_putpixel_final;
+	scr_putpixel_final_rgb=scrsimpletext_putpixel_final_rgb;
+
+        scr_get_menu_width=scrsimpletext_get_menu_width;
+        scr_get_menu_height=scrsimpletext_get_menu_height;
+	scr_driver_can_ext_desktop=scrsimpletext_driver_can_ext_desktop;
 	
 	
 	scr_set_fullscreen=scrsimpletext_set_fullscreen;
@@ -364,11 +395,30 @@ void scr_simpletext_common_fun_saltolinea (void)
 
 void scrsimpletext_repinta_pantalla(void)
 {
+
+
+        if (sem_screen_refresh_reallocate_layers) {
+                //printf ("--Screen layers are being reallocated. return\n");
+                //debug_exec_show_backtrace();
+                return;
+        }
+
+        sem_screen_refresh_reallocate_layers=1;
+
+
 	
 	//enviar Ansi inicio pantalla
 	screen_text_send_ansi_go_home();
 	
-	if (MACHINE_IS_ZX8081) {
+		 //si todo de pixel a ascii art
+     if (rainbow_enabled.v && screen_text_all_refresh_pixel.v) {
+     
+scr_refresca_pantalla_tsconf_text(scr_simpletext_common_fun_color,scr_simpletext_common_fun_caracter,scr_simpletext_common_fun_saltolinea,screen_text_all_refresh_pixel_scale);
+     
+     }
+	
+	
+	else if (MACHINE_IS_ZX8081) {
 		screen_text_repinta_pantalla_zx81();
 	}
 	
@@ -398,6 +448,10 @@ void scrsimpletext_repinta_pantalla(void)
                 screen_text_repinta_pantalla_cpc();
         }
 
+        else if (MACHINE_IS_CHLOE) {
+                screen_text_repinta_pantalla_chloe();
+        }
+
 
 	else if (MACHINE_IS_TSCONF) {
 
@@ -405,6 +459,7 @@ void scrsimpletext_repinta_pantalla(void)
                 z80_byte modo_video=tsconf_get_video_mode_display();
                 if (modo_video==3) {
                         scr_refresca_pantalla_tsconf_text_textmode(scr_simpletext_common_fun_color,scr_simpletext_common_fun_caracter,scr_simpletext_common_fun_saltolinea,12);
+			sem_screen_refresh_reallocate_layers=0;
                         return;
                 }
 
@@ -426,6 +481,9 @@ void scrsimpletext_repinta_pantalla(void)
 		screen_text_repinta_pantalla_spectrum();
 		
 	}
+
+
+	sem_screen_refresh_reallocate_layers=0;
 	
 	
 }

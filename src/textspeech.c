@@ -564,7 +564,7 @@ void textspeech_add_speech_fifo_filter_unknown(void)
 
 	for (i=0;buffer_speech[i];i++) {
 		c=buffer_speech[i];
-		if (c<32 || c>127 || c=='^' || c=='~') buffer_speech[i]=' ';
+		if (c<32 || c>126 || c=='^' || c=='~') buffer_speech[i]=' ';
 	}
 }
 
@@ -573,7 +573,7 @@ void textspeech_add_speech_fifo(void)
 
         if (textspeech_filter_program==NULL) return;
 
-				//Filtrar de la cadena de speech caracteres <32 o >127 u otros
+				//Filtrar de la cadena de speech caracteres <32 o >126 u otros
 				textspeech_add_speech_fifo_filter_unknown();
 
 
@@ -703,18 +703,11 @@ void textspeech_send_new_line(void)
 
 void textspeech_print_operating(void)
 {
-        if (textspeech_operating_counter) {
-                //color inverso
-                menu_putstring_footer(WINDOW_FOOTER_ELEMENT_X_TEXT_FILTER,1," SPEECH ",WINDOW_FOOTER_PAPER,WINDOW_FOOTER_INK);
-        }
+        generic_footertext_print_operating("SPEECH");
+
 }
 
 
-
-void textspeech_clear_operating(void)
-{
-	menu_putstring_footer(WINDOW_FOOTER_ELEMENT_X_TEXT_FILTER,1,"        ",WINDOW_FOOTER_INK,WINDOW_FOOTER_PAPER);
-}
 
 
 int index_buffer_pantalla_speech;

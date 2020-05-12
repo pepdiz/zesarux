@@ -33,7 +33,9 @@ extern z80_byte *timex_rom_mem_table[];
 
 extern z80_byte *timex_home_ram_mem_table[];
 
-extern z80_byte *timex_ex_ram_mem_table[];
+extern z80_byte *timex_ex_rom_mem_table[];
+
+extern z80_byte *timex_dock_rom_mem_table[];
 
 extern z80_byte *timex_memory_paged[];
 
@@ -78,6 +80,8 @@ extern int get_timex_paper_mode6_color(void);
 
 extern int timex_ugly_hack_enabled;
 extern int timex_ugly_hack_last_hires;
+
+extern void set_timex_port_ff(z80_byte value);
 
 
 #endif

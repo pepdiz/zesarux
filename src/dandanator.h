@@ -40,4 +40,6 @@ extern void dandanator_press_button(void);
 
 extern z80_byte *dandanator_memory_pointer;
 
+extern z80_bit dandanator_cpc_received_preffix;
+
 #endif

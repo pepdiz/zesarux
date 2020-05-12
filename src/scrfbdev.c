@@ -319,26 +319,26 @@ void scrfbdev_putchar_zx8081(int x,int y, z80_byte caracter)
 
 
 //Rutina de putchar para menu
-void scrfbdev_putchar_menu(int x,int y, z80_byte caracter,z80_byte tinta,z80_byte papel)
+void scrfbdev_putchar_menu(int x,int y, z80_byte caracter,int tinta,int papel)
 {
 
 
-	z80_bit inverse,f;
+	z80_bit inverse;
 
 	//caracter=da_codigo81(caracter,&inverse);
 	//printf ("%c",caracter);
 
 	inverse.v=0;
-	f.v=0;
+
         //128 y 129 corresponden a franja de menu y a letra enye minuscula
         if (caracter<32 || caracter>MAX_CHARSET_GRAPHIC) caracter='?';
-	//scr_putsprite_comun     (&char_set[(caracter-32)*8],x,y,inverse,tinta,papel,f);
-        scr_putsprite_comun_zoom(&char_set[(caracter-32)*8],x,y,inverse,tinta,papel,f,menu_gui_zoom);
+
+        scr_putchar_menu_comun_zoom(caracter,x,y,inverse,tinta,papel,menu_gui_zoom);
 
 
 }
 
-void scrfbdev_putchar_footer(int x,int y, z80_byte caracter,z80_byte tinta,z80_byte papel)
+void scrfbdev_putchar_footer(int x,int y, z80_byte caracter,int tinta,int papel)
 {
 
 	int yorigen;
@@ -350,13 +350,14 @@ void scrfbdev_putchar_footer(int x,int y, z80_byte caracter,z80_byte tinta,z80_b
 
 	//scr_putchar_menu(x,yorigen+y,caracter,tinta,papel);
         y +=yorigen;
-        z80_bit inverse,f;
+        z80_bit inverse;
 
         inverse.v=0;
-        f.v=0;
+
         //128 y 129 corresponden a franja de menu y a letra enye minuscula
         if (caracter<32 || caracter>MAX_CHARSET_GRAPHIC) caracter='?';
-        scr_putsprite_comun_zoom(&char_set[(caracter-32)*8],x,y,inverse,tinta,papel,f,1);
+        //scr_putchar_menu_comun_zoom(caracter,x,y,inverse,tinta,papel,1);
+		scr_putchar_footer_comun_zoom(caracter,x,y,inverse,tinta,papel);
 
 }
 
@@ -381,6 +382,14 @@ void scrfbdev_refresca_pantalla(void)
 {
 
 
+        if (sem_screen_refresh_reallocate_layers) {
+                //printf ("--Screen layers are being reallocated. return\n");
+                //debug_exec_show_backtrace();
+                return;
+        }
+
+        sem_screen_refresh_reallocate_layers=1;
+
 
 	if (MACHINE_IS_ZX8081) {
 
@@ -392,6 +401,10 @@ void scrfbdev_refresca_pantalla(void)
         else if (MACHINE_IS_PRISM) {
                 screen_prism_refresca_pantalla();
         }
+
+        else if (MACHINE_IS_TBBLUE) {
+                screen_tbblue_refresca_pantalla();
+        }		
 
 
 	else if (MACHINE_IS_SPECTRUM) {
@@ -456,7 +469,10 @@ void scrfbdev_refresca_pantalla(void)
 
 
         //Escribir footer
-        draw_footer();
+        draw_middle_footer();
+
+
+	sem_screen_refresh_reallocate_layers=0;
 
 
 }
@@ -467,7 +483,7 @@ void scrfbdev_refresca_pantalla(void)
 
 void scrfbdev_set_fullscreen(void)
 {
-	//debug_printf (VERBOSE_ERR,"Full screen mode not supported on this video driver");
+	//debug_printf (VERBOSE_ERR,"fbdev: Full screen mode not supported on this video driver");
 
 	scrfbdev_end();
 	ventana_fullscreen=1;
@@ -479,7 +495,7 @@ void scrfbdev_set_fullscreen(void)
 
 void scrfbdev_reset_fullscreen(void)
 {
-	//debug_printf (VERBOSE_ERR,"Full screen mode not supported on this video driver");
+	//debug_printf (VERBOSE_ERR,"fbdev: Full screen mode not supported on this video driver");
 
 	scrfbdev_end();
 	ventana_fullscreen=0;
@@ -501,7 +517,7 @@ int fbdev_setvt(int vtno)
 
 	if (vtno < 0) {
 		if (-1 == ioctl(fbdev_tty,VT_OPENQRY, &vtno) || vtno == -1) {
-			debug_printf(VERBOSE_ERR,"ioctl VT_OPENQRY");
+			debug_printf(VERBOSE_ERR,"fbdev: ioctl VT_OPENQRY");
 			return 1;
 		}
 	}
@@ -510,21 +526,21 @@ int fbdev_setvt(int vtno)
 	sprintf(vtname, devices->ttynr, vtno);
 	chown(vtname, getuid(), getgid());
 	if (-1 == access(vtname, R_OK | W_OK)) {
-		debug_printf(VERBOSE_ERR,"access %s: %s\n",vtname,strerror(errno));
+		debug_printf(VERBOSE_ERR,"fbdev: access %s: %s\n",vtname,strerror(errno));
 		return 1;
 	}
 
 	if (-1 == ioctl(fbdev_tty,VT_GETSTATE, &vts)) {
-		debug_printf(VERBOSE_ERR,"ioctl VT_GETSTATE");
+		debug_printf(VERBOSE_ERR,"fbdev: ioctl VT_GETSTATE");
 		return 1;
 	}
 	//orig_vt_no = vts.v_active;
 	if (-1 == ioctl(fbdev_tty,VT_ACTIVATE, vtno)) {
-		debug_printf(VERBOSE_ERR,"ioctl VT_ACTIVATE");
+		debug_printf(VERBOSE_ERR,"fbdev: ioctl VT_ACTIVATE");
 		return 1;
 	}
 	if (-1 == ioctl(fbdev_tty,VT_WAITACTIVE, vtno)) {
-		debug_printf(VERBOSE_ERR,"ioctl VT_WAITACTIVE");
+		debug_printf(VERBOSE_ERR,"fbdev: ioctl VT_WAITACTIVE");
 		return 1;
 	}
 
@@ -537,15 +553,15 @@ static int fbdev_activate_current(int tty)
 	struct vt_stat vts;
 
 	if (-1 == ioctl(tty,VT_GETSTATE, &vts)) {
-		debug_printf(VERBOSE_ERR,"ioctl VT_GETSTATE");
+		debug_printf(VERBOSE_ERR,"fbdev: ioctl VT_GETSTATE");
 		return 1;
 	}
 	if (-1 == ioctl(tty,VT_ACTIVATE, vts.v_active)) {
-		debug_printf(VERBOSE_ERR,"ioctl VT_ACTIVATE");
+		debug_printf(VERBOSE_ERR,"fbdev: ioctl VT_ACTIVATE");
 		return 1;
 	}
 	if (-1 == ioctl(tty,VT_WAITACTIVE, vts.v_active)) {
-		debug_printf(VERBOSE_ERR,"ioctl VT_WAITACTIVE");
+		debug_printf(VERBOSE_ERR,"fbdev: ioctl VT_WAITACTIVE");
 		return 1;
 	}
 	return 0;
@@ -580,7 +596,7 @@ void scrfbdev_end(void)
 
 		if (fbdev_sends_release.v) {
 			if (ioctl(0, KDSKBMODE, fbdev_initial_tty_mode)) {
-				debug_printf(VERBOSE_ERR,"Couldn't restore tty original mode");
+				debug_printf(VERBOSE_ERR,"fbdev: Couldn't restore tty original mode");
 			}
 		}
 
@@ -592,7 +608,7 @@ void scrfbdev_end(void)
 	 * struct termios termios_valores;
 	 * if (tcgetattr(fbdev_tty,&termios_valores)==-1)
 	 * {
-	 * debug_printf(VERBOSE_ERR,"couldn't set tty raw mode");
+	 * debug_printf(VERBOSE_ERR,"fbdev: couldn't set tty raw mode");
 	 * //return 1;
 }
 
@@ -600,7 +616,7 @@ fbdev_tty_makecooked(&termios_valores);
 
 
 if (tcsetattr(fbdev_tty, TCSANOW, &termios_valores)==-1) {
-	debug_printf(VERBOSE_ERR,"couldn't set tty raw mode");
+	debug_printf(VERBOSE_ERR,"fbdev: couldn't set tty raw mode");
 	//return 1;
 }
 */
@@ -690,7 +706,7 @@ char temp_index_buffer_teclas=0;
 //Nota: estos valores de teclado son identicos a los leidos desde assembler,
 //e incluso a los que se leerian en un msdos
 //por ejemplo, en mi emulador ZXSpectr, la rutina es equivalente
-//http://sourceforge.net/projects/zxspectr/
+//https://github.com/chernandezba/zxspectr
 void scrfbdev_actualiza_tablas_teclado_rawmode(void){
 
 	int pressrelease;
@@ -1507,23 +1523,46 @@ void putpixel_fbdev_lowlevel_16bpp(int x,int y,z80_byte r,z80_byte g,z80_byte b)
 
 }
 
+void scrfbdev_putpixel_final_rgb(int x,int y,unsigned int color_rgb)
+{
+	z80_byte r,g,b;
 
-void scrfbdev_putpixel(int x,int y,unsigned int color)
+	b=color_rgb;
+	color_rgb=color_rgb>>8;
+
+	g=color_rgb;
+	color_rgb=color_rgb>>8;
+
+	r=color_rgb;
+
+	putpixel_fbdev_lowlevel(x,y,r,g,b);	
+}
+
+
+void scrfbdev_putpixel_final(int x,int y,unsigned int color)
 {
 
-	z80_byte r,g,b;
 	int c;
 	c=spectrum_colortable[color];
 
-	b=c;
-	c=c>>8;
+	scrfbdev_putpixel_final_rgb(x,y,c);
 
-	g=c;
-	c=c>>8;
+}
 
-	r=c;
 
-	putpixel_fbdev_lowlevel(x,y,r,g,b);
+void scrfbdev_putpixel(int x,int y,unsigned int color)
+{
+    if (menu_overlay_activo==0) {
+                //Putpixel con menu cerrado
+                scrfbdev_putpixel_final(x,y,color);
+                return;
+        }          
+
+        //Metemos pixel en layer adecuado
+	buffer_layer_machine[y*ancho_layer_menu_machine+x]=color;        
+
+        //Putpixel haciendo mix  
+        screen_putpixel_mix_layers(x,y);   
 }
 
 void scrfbdev_special_scale_putpixel(int x,int y,unsigned int color)
@@ -1626,7 +1665,7 @@ int fbdev_init_tty(void)
 	struct vt_stat vts;
 
 	if (-1 == ioctl(fbdev_tty,VT_GETSTATE, &vts)) {
-		debug_printf(VERBOSE_ERR,"ioctl VT_GETSTATE: %s (not a linux console?)",strerror(errno));
+		debug_printf(VERBOSE_ERR,"fbdev: ioctl VT_GETSTATE: %s (not a linux console?)",strerror(errno));
 		return 1;
 	}
 
@@ -1638,7 +1677,7 @@ int fbdev_init_tty(void)
 	int flags;
 	if((flags=fcntl(fbdev_tty,F_GETFL))==-1)
 	{
-		debug_printf(VERBOSE_ERR,"couldn't get flags from tty device: %s",strerror(errno));
+		debug_printf(VERBOSE_ERR,"fbdev: couldn't get flags from tty device: %s",strerror(errno));
 		return 1;
 	}
 
@@ -1652,7 +1691,7 @@ int fbdev_init_tty(void)
 
 	if(fcntl(fbdev_tty,F_SETFL,flags)==-1)
 	{
-		debug_printf(VERBOSE_ERR,"couldn't set tty device non-blocking: %s",strerror(errno));
+		debug_printf(VERBOSE_ERR,"fbdev: couldn't set tty device non-blocking: %s",strerror(errno));
 		return 1;
 	}
 
@@ -1661,7 +1700,7 @@ int fbdev_init_tty(void)
 
 	if (tcgetattr(fbdev_tty,&termios_valores)==-1)
 	{
-		debug_printf(VERBOSE_ERR,"couldn't set tty raw mode");
+		debug_printf(VERBOSE_ERR,"fbdev: couldn't set tty raw mode");
 		return 1;
 	}
 
@@ -1672,7 +1711,7 @@ int fbdev_init_tty(void)
 
 
 	if (tcsetattr(fbdev_tty, TCSANOW, &termios_valores)==-1) {
-		debug_printf(VERBOSE_ERR,"couldn't set tty raw mode");
+		debug_printf(VERBOSE_ERR,"fbdev: couldn't set tty raw mode");
 		return 1;
 	}
 
@@ -1685,14 +1724,14 @@ int fbdev_init_tty(void)
 		//printf ("poniendo terminal en modo teclado raw\n");
 
 		if (ioctl(0, KDGKBMODE, &fbdev_initial_tty_mode)) {
-			debug_printf(VERBOSE_ERR,"Couldn't get tty mode");
+			debug_printf(VERBOSE_ERR,"fbdev: Couldn't get tty mode");
 		}
 
 		else {
 
 			//establecer
 			if (ioctl(0, KDSKBMODE, K_RAW)) {
-				debug_printf(VERBOSE_ERR,"Couldn't set tty raw mode");
+				debug_printf(VERBOSE_ERR,"fbdev: Couldn't set tty raw mode");
 			}
 
 			else {
@@ -1726,6 +1765,33 @@ void scrfbdev_detectedchar_print(z80_byte caracter)
 
 }
 
+//Estos valores no deben ser mayores de OVERLAY_SCREEN_MAX_WIDTH y OVERLAY_SCREEN_MAX_HEIGTH
+int scrfbdev_get_menu_width(void)
+{
+        int max=screen_get_emulated_display_width_no_zoom_border_en()/menu_char_width/menu_gui_zoom;
+        if (max>OVERLAY_SCREEN_MAX_WIDTH) max=OVERLAY_SCREEN_MAX_WIDTH;
+
+                //printf ("max x: %d %d\n",max,screen_get_emulated_display_width_no_zoom_border_en());
+
+        return max;
+}
+
+
+int scrfbdev_get_menu_height(void)
+{
+        int max=screen_get_emulated_display_height_no_zoom_border_en()/8/menu_gui_zoom;
+        if (max>OVERLAY_SCREEN_MAX_HEIGTH) max=OVERLAY_SCREEN_MAX_HEIGTH;
+
+                //printf ("max y: %d %d\n",max,screen_get_emulated_display_height_no_zoom_border_en());
+        return max;
+}
+
+int scrfbdev_driver_can_ext_desktop (void)
+{
+        return 0;
+}
+
+
 //Fbdev video drivers
 int scrfbdev_init (void){
 
@@ -1736,6 +1802,10 @@ int scrfbdev_init (void){
 
 	scr_putchar_menu=scrfbdev_putchar_menu;
 	scr_putchar_footer=scrfbdev_putchar_footer;
+
+        scr_get_menu_width=scrfbdev_get_menu_width;
+        scr_get_menu_height=scrfbdev_get_menu_height;	
+	scr_driver_can_ext_desktop=scrfbdev_driver_can_ext_desktop;
 
 
 	scr_set_fullscreen=scrfbdev_set_fullscreen;
@@ -1767,7 +1837,7 @@ int scrfbdev_init (void){
 	// Open the file for reading and writing
 	fbdev_filedescriptor = open("/dev/fb0", O_RDWR);
 	if (!fbdev_filedescriptor) {
-		debug_printf(VERBOSE_ERR,"Error: cannot open framebuffer device.\n");
+		debug_printf(VERBOSE_ERR,"fbdev: Error: cannot open framebuffer device.\n");
 		return 1;
 	}
 
@@ -1775,13 +1845,16 @@ int scrfbdev_init (void){
 
 	// Get fixed screen information
 	if (ioctl(fbdev_filedescriptor, FBIOGET_FSCREENINFO, &fixinfo)) {
-		debug_printf(VERBOSE_ERR,"Error reading fixed information.");
+	//ponemos este mensaje en debug y no en error para que no se active menu y 
+	//salga error cuando hace autodeteccion de driver de video. es especialmente molesto si el driver es stdout
+	//mensaje de abajo de variable information tambien seria susceptible de cambiar a debug
+		debug_printf(VERBOSE_DEBUG,"fbdev: Error reading fixed information.");
 		return 1;
 	}
 
 	// Get variable screen information
 	if (ioctl(fbdev_filedescriptor, FBIOGET_VSCREENINFO, &varinfo)) {
-		debug_printf(VERBOSE_ERR,"Error reading variable information.");
+		debug_printf(VERBOSE_ERR,"fbdev: Error reading variable information.");
 		return 1;
 	}
 
@@ -1805,14 +1878,14 @@ int scrfbdev_init (void){
 
 		// Set variable screen information
 		if (ioctl(fbdev_filedescriptor, FBIOPUT_VSCREENINFO, &varinfo)) {
-			debug_printf(VERBOSE_ERR,"Error Setting variable information.");
+			debug_printf(VERBOSE_ERR,"fbdev: Error Setting variable information.");
 			return 1;
 		}
 
 
 		// Get fixed screen information
 		if (ioctl(fbdev_filedescriptor, FBIOGET_FSCREENINFO, &fixinfo)) {
-			debug_printf(VERBOSE_ERR,"Error reading fixed information.");
+			debug_printf(VERBOSE_ERR,"fbdev: Error reading fixed information.");
 			return 1;
 		}
 
@@ -1871,6 +1944,9 @@ int scrfbdev_init (void){
 	//sin zoom escalado especial, y luego en raspberry (y/o con opcion adicional) cambiar previamente la resolucion a la similar a spectrum
 	scr_putpixel=scrfbdev_putpixel;
 
+    scr_putpixel_final=scrfbdev_putpixel_final;
+    scr_putpixel_final_rgb=scrfbdev_putpixel_final_rgb;	
+
 	if (ventana_fullscreen && fbdev_decimal_full_scale_fbdev) {
 
 
@@ -1908,7 +1984,7 @@ int scrfbdev_init (void){
 	//Inicializar tty
 	if (!fbdev_no_uses_tty) {
 		if (fbdev_init_tty()) {
-			//debug_printf (VERBOSE_ERR,"Error initializing tty
+			//debug_printf (VERBOSE_ERR,"fbdev: Error initializing tty
 			return 1;
 		}
 	}
@@ -1924,21 +2000,21 @@ int scrfbdev_init (void){
 	//printf ("zoom_max_x: %d zoom_max_y: %d \n",zoom_max_x,zoom_max_y);
 
 	if (zoom_max_x==0 || zoom_max_y==0) {
-		debug_printf (VERBOSE_ERR,"No minimum size found");
+		debug_printf (VERBOSE_ERR,"fbdev: No minimum size found");
 		return 1;
 	}
 
 	if (zoom_x>zoom_max_x || zoom_y>zoom_max_y) {
-		debug_printf (VERBOSE_ERR,"zoom to big");
+		debug_printf (VERBOSE_ERR,"fbdev: zoom to big");
 		zoom_x=zoom_y=1;
 		set_putpixel_zoom();
 	}
 
 	//Obtener Orden componentes R G B Alpha
-	debug_printf (VERBOSE_DEBUG,"Framebuffer: Red: Offset: %d Lenght: %d",varinfo.red.offset,varinfo.red.length);
-	debug_printf (VERBOSE_DEBUG,"Framebuffer: Green: Offset: %d Lenght: %d",varinfo.green.offset,varinfo.green.length);
-	debug_printf (VERBOSE_DEBUG,"Framebuffer: Blue: Offset: %d Lenght: %d",varinfo.blue.offset,varinfo.blue.length);
-	debug_printf (VERBOSE_DEBUG,"Framebuffer: Alpha: Offset: %d Lenght: %d",varinfo.transp.offset,varinfo.transp.length);
+	debug_printf (VERBOSE_DEBUG,"Framebuffer: Red: Offset: %d Length: %d",varinfo.red.offset,varinfo.red.length);
+	debug_printf (VERBOSE_DEBUG,"Framebuffer: Green: Offset: %d Length: %d",varinfo.green.offset,varinfo.green.length);
+	debug_printf (VERBOSE_DEBUG,"Framebuffer: Blue: Offset: %d Length: %d",varinfo.blue.offset,varinfo.blue.length);
+	debug_printf (VERBOSE_DEBUG,"Framebuffer: Alpha: Offset: %d Length: %d",varinfo.transp.offset,varinfo.transp.length);
 
 	/*
 	 *
@@ -1969,7 +2045,7 @@ int scrfbdev_init (void){
 			break;
 
 		default:
-			debug_printf(VERBOSE_ERR,"Bpp %d not supported\n",bpp);
+			debug_printf(VERBOSE_ERR,"fbdev: Bpp %d not supported\n",bpp);
 			return 1;
 			break;
 	}
@@ -1983,7 +2059,7 @@ int scrfbdev_init (void){
 			     fbdev_filedescriptor, 0);
 
 	if (fbdev_pointer == -1) {
-		debug_printf(VERBOSE_ERR,"Failed to mmap.\n");
+		debug_printf(VERBOSE_ERR,"fbdev: Failed to mmap.\n");
 		return 1;
 	}
 
@@ -2029,6 +2105,8 @@ int scrfbdev_init (void){
 	scr_driver_name="fbdev";
 
 	scr_z88_cpc_load_keymap();
+
+    scr_reallocate_layers_menu(fbdev_ancho,fbdev_alto);    	
 
 	return 0;
 

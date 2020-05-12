@@ -440,8 +440,6 @@ int ide_set_image_parameters(void)
 			ide_disk_cylinders=1986;
 		break;
 
-                break;
-
 
                 default:
                         debug_printf (VERBOSE_ERR,"Invalid card size. Must be one of: 8, 16, 32, 64, 128, 256, 512, 1024 MB");

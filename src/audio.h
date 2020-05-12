@@ -75,7 +75,10 @@ extern char *audio_driver_name;
 
 extern char *audio_buffer_one;
 extern char *audio_buffer_two;
-extern char audio_buffer_oneandtwo[AUDIO_BUFFER_SIZE*2];
+//extern char audio_buffer_oneandtwo[AUDIO_BUFFER_SIZE*2];
+
+extern char audio_buffer_one_assigned[];
+extern char audio_buffer_two_assigned[];
 
 
 extern int audio_buffer_indice;
@@ -146,12 +149,47 @@ typedef struct s_nota_musical nota_musical;
 #define MAX_NOTAS_MUSICALES (NOTAS_MUSICALES_OCTAVAS*NOTAS_MUSICALES_NOTAS_POR_OCTAVA)
 
 extern char *get_note_name(int frecuencia);
+extern int get_mid_number_note(char *str);
+extern void get_note_values(char *texto,int *nota_final,int *si_sostenido,int *octava);
 extern int set_audiodriver_null(void);
 extern void fallback_audio_null(void);
 extern void audio_empty_buffer(void);
 
+extern int mid_mete_cabecera(z80_byte *midi_file,int pistas,int division);
+extern int mid_mete_inicio_pista(z80_byte *mem,int division);
+extern int mid_mete_evento_final_pista(unsigned char *mem);
+extern int mid_mete_nota(z80_byte *mem,int silencio_anterior,int duracion,int canal_midi,int keynote,int velocity);
+extern void mid_mete_longitud_pista(z80_byte *mem,int longitud);
+extern void mid_frame_event(void);
+extern int audio_midi_output_initialized;
+extern void audio_midi_output_frame_event(void);
+
+extern int audio_midi_raw_mode;
+
+extern int audio_midi_output_note_on(unsigned char channel, unsigned char note);
+extern void audio_midi_output_raw(z80_byte value);
+extern void audio_midi_output_reset(void);
+
+//Para cuantas notas da esto aprox?
+#define MAX_MID_EXPORT_BUFFER 1000000
+
+extern z80_bit mid_is_recording;
+extern z80_bit mid_is_paused;
+extern char mid_export_file[];
+extern int mid_chips_al_start;
+//extern int mid_record_at_least_one;
+extern int mid_notes_recorded;
+extern z80_bit mid_record_noisetone;
+extern int mid_has_been_initialized(void);
+extern void mid_flush_file(void);
+extern void mid_initialize_export(void);
+extern void mid_reset_export_buffers(void);
+extern int mid_max_buffer(void);
+
 extern char audio_valor_enviar_sonido;
-//extern int audio_valor_enviar_sonido;
+
+extern char audio_valor_enviar_sonido_izquierdo;
+extern char audio_valor_enviar_sonido_derecho;
 
 extern int audio_ay_player_load(char *filename);
 extern z80_byte *audio_ay_player_mem;
@@ -219,5 +257,66 @@ extern void audiodac_print_types(void);
 extern int audiodac_set_type(char *texto);
 
 extern void audiodac_set_custom_port(z80_byte valor);
+
+
+
+struct s_audiobuffer_stats
+{
+	int maximo;
+	int minimo;
+	int medio;
+	int frecuencia;
+	int volumen;  //entre 0 y 127
+
+	int volumen_escalado;  //escalado entre 0 y 15, como los volumenes del chip AY
+};
+
+typedef struct s_audiobuffer_stats audiobuffer_stats;
+
+extern void audio_get_audiobuffer_stats(audiobuffer_stats *audiostats);
+
+extern int audio_tone_generator;
+extern char audio_tone_generator_last;
+extern char audio_tone_generator_get(void);
+
+extern char audio_change_top_speed_sound(char sonido);
+
+extern void audio_send_mono_sample(char valor_sonido);
+extern void audio_send_stereo_sample(char valor_sonido_izquierdo,char valor_sonido_derecho);
+
+//extern z80_bit audio_driver_accepts_stereo;
+
+extern void audiodac_send_sample_value(z80_byte value);
+
+extern void midi_output_frame_event(void);
+extern int audio_midi_output_init(void);
+extern void audio_midi_output_finish(void);
+
+extern z80_bit midi_output_record_noisetone;
+
+#define FREQ_TOP_SPEED_CHANGE 12800
+
+extern int audio_midi_client;
+extern int audio_midi_port;
+extern int audio_midi_available(void);
+
+extern char audio_raw_midi_device_out[];
+
+#define MAX_AUDIO_RAW_MIDI_DEVICE_OUT 128
+
+
+#ifdef MINGW
+
+//extern int windows_midi_midiport;
+extern void windows_midi_output_flush_output(void);
+extern int windows_mid_initialize_all(void);
+extern void windows_mid_finish_all(void);
+extern int windows_note_on(unsigned char channel, unsigned char note,unsigned char velocity);
+extern int windows_note_off(unsigned char channel, unsigned char note,unsigned char velocity);
+extern void windows_midi_raw(z80_byte value);
+extern void windows_midi_output_reset(void);
+
+
+#endif
 
 #endif

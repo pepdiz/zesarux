@@ -40,6 +40,8 @@ extern z80_bit ula_late_timings;
 
 extern z80_bit pentagon_timing;
 
+extern z80_byte puerto_eff7;
+
 extern void ula_disable_pentagon_timing(void);
 extern void ula_enable_pentagon_timing(void);
 
@@ -72,6 +74,7 @@ extern void zesarux_zxi_write_register_value(z80_byte value);
 extern z80_byte zesarux_zxi_read_register_value(void);
 
 extern void generate_nmi(void);
+extern void generate_nmi_multiface_tbblue(void);
 
 
 extern z80_bit keyboard_matrix_error;
@@ -80,5 +83,10 @@ extern z80_bit keyboard_matrix_error;
 extern void recreated_zx_spectrum_keyboard_convert(int tecla, enum util_teclas *tecla_final, int *pressrelease);
 extern z80_bit recreated_zx_keyboard_support;
 extern z80_bit recreated_zx_keyboard_pressed_caps;
+
+extern void nmi_handle_pending_prepost_fetch(void);
+extern int nmi_pending_pre_opcode;
+extern int nmi_pending_post_opcode;
+extern void generate_nmi_prepare_fetch(void);
 
 #endif

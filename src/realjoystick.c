@@ -19,327 +19,7 @@
 
 */
 
-/*
 
-https://www.kernel.org/doc/Documentation/input/joystick-api.txt
-
-		      Joystick API Documentation                -*-Text-*-
-
-		        Ragnar Hojland Espinosa
-			  <ragnar@macula.net>
-
-			      7 Aug 1998
-
-1. Initialization
-~~~~~~~~~~~~~~~~~
-
-Open the joystick device following the usual semantics (that is, with open).
-Since the driver now reports events instead of polling for changes,
-immediately after the open it will issue a series of synthetic events
-(JS_EVENT_INIT) that you can read to check the initial state of the
-joystick.
-
-By default, the device is opened in blocking mode.
-
-	int fd = open ("/dev/input/js0", O_RDONLY);
-
-
-2. Event Reading
-~~~~~~~~~~~~~~~~
-
-	struct js_event e;
-	read (fd, &e, sizeof(e));
-
-where js_event is defined as
-
-	struct js_event {
-		__u32 time;     // event timestamp in milliseconds
-		__s16 value;    // value
-		__u8 type;      // event type
-		__u8 number;    // axis/button number
-	};
-
-If the read is successful, it will return sizeof(e), unless you wanted to read
-more than one event per read as described in section 3.1.
-
-
-2.1 js_event.type
-~~~~~~~~~~~~~~~~~
-
-The possible values of ``type'' are
-
-	#define JS_EVENT_BUTTON         0x01    // button pressed/released
-	#define JS_EVENT_AXIS           0x02    // joystick moved
-	#define JS_EVENT_INIT           0x80    // initial state of device
-
-As mentioned above, the driver will issue synthetic JS_EVENT_INIT ORed
-events on open. That is, if it's issuing a INIT BUTTON event, the
-current type value will be
-
-	int type = JS_EVENT_BUTTON | JS_EVENT_INIT;	// 0x81
-
-If you choose not to differentiate between synthetic or real events
-you can turn off the JS_EVENT_INIT bits
-
-	type &= ~JS_EVENT_INIT;				// 0x01
-
-
-2.2 js_event.number
-~~~~~~~~~~~~~~~~~~~
-
-The values of ``number'' correspond to the axis or button that
-generated the event. Note that they carry separate numeration (that
-is, you have both an axis 0 and a button 0). Generally,
-
-			number
-	1st Axis X	0
-	1st Axis Y	1
-	2nd Axis X	2
-	2nd Axis Y	3
-	...and so on
-
-Hats vary from one joystick type to another. Some can be moved in 8
-directions, some only in 4, The driver, however, always reports a hat as two
-independent axis, even if the hardware doesn't allow independent movement.
-
-
-2.3 js_event.value
-~~~~~~~~~~~~~~~~~~
-
-For an axis, ``value'' is a signed integer between -32767 and +32767
-representing the position of the joystick along that axis. If you
-don't read a 0 when the joystick is `dead', or if it doesn't span the
-full range, you should recalibrate it (with, for example, jscal).
-
-For a button, ``value'' for a press button event is 1 and for a release
-button event is 0.
-
-Though this
-
-	if (js_event.type == JS_EVENT_BUTTON) {
-		buttons_state ^= (1 << js_event.number);
-	}
-
-may work well if you handle JS_EVENT_INIT events separately,
-
-	if ((js_event.type & ~JS_EVENT_INIT) == JS_EVENT_BUTTON) {
-		if (js_event.value)
-			buttons_state |= (1 << js_event.number);
-		else
-			buttons_state &= ~(1 << js_event.number);
-	}
-
-is much safer since it can't lose sync with the driver. As you would
-have to write a separate handler for JS_EVENT_INIT events in the first
-snippet, this ends up being shorter.
-
-
-2.4 js_event.time
-~~~~~~~~~~~~~~~~~
-
-The time an event was generated is stored in ``js_event.time''. It's a time
-in milliseconds since ... well, since sometime in the past.  This eases the
-task of detecting double clicks, figuring out if movement of axis and button
-presses happened at the same time, and similar.
-
-
-3. Reading
-~~~~~~~~~~
-
-If you open the device in blocking mode, a read will block (that is,
-wait) forever until an event is generated and effectively read. There
-are two alternatives if you can't afford to wait forever (which is,
-admittedly, a long time;)
-
-	a) use select to wait until there's data to be read on fd, or
-	   until it timeouts. There's a good example on the select(2)
-	   man page.
-
-	b) open the device in non-blocking mode (O_NONBLOCK)
-
-
-3.1 O_NONBLOCK
-~~~~~~~~~~~~~~
-
-If read returns -1 when reading in O_NONBLOCK mode, this isn't
-necessarily a "real" error (check errno(3)); it can just mean there
-are no events pending to be read on the driver queue. You should read
-all events on the queue (that is, until you get a -1).
-
-For example,
-
-	while (1) {
-		while (read (fd, &e, sizeof(e)) > 0) {
-			process_event (e);
-		}
-		// EAGAIN is returned when the queue is empty
-		if (errno != EAGAIN) {
-			// error
-		}
-		// do something interesting with processed events
-	}
-
-One reason for emptying the queue is that if it gets full you'll start
-missing events since the queue is finite, and older events will get
-overwritten.
-
-The other reason is that you want to know all what happened, and not
-delay the processing till later.
-
-Why can get the queue full? Because you don't empty the queue as
-mentioned, or because too much time elapses from one read to another
-and too many events to store in the queue get generated. Note that
-high system load may contribute to space those reads even more.
-
-If time between reads is enough to fill the queue and lose an event,
-the driver will switch to startup mode and next time you read it,
-synthetic events (JS_EVENT_INIT) will be generated to inform you of
-the actual state of the joystick.
-
-[As for version 1.2.8, the queue is circular and able to hold 64
- events. You can increment this size bumping up JS_BUFF_SIZE in
- joystick.h and recompiling the driver.]
-
-
-In the above code, you might as well want to read more than one event
-at a time using the typical read(2) functionality. For that, you would
-replace the read above with something like
-
-	struct js_event mybuffer[0xff];
-	int i = read (fd, mybuffer, sizeof(mybuffer));
-
-In this case, read would return -1 if the queue was empty, or some
-other value in which the number of events read would be i /
-sizeof(js_event)  Again, if the buffer was full, it's a good idea to
-process the events and keep reading it until you empty the driver queue.
-
-
-4. IOCTLs
-~~~~~~~~~
-
-The joystick driver defines the following ioctl(2) operations.
-
-				// function			3rd arg
-	#define JSIOCGAXES	// get number of axes		char
-	#define JSIOCGBUTTONS	// get number of buttons	char
-	#define JSIOCGVERSION	// get driver version		int
-	#define JSIOCGNAME(len) // get identifier string	char
-	#define JSIOCSCORR	// set correction values	&js_corr
-	#define JSIOCGCORR	// get correction values	&js_corr
-
-For example, to read the number of axes
-
-	char number_of_axes;
-	ioctl (fd, JSIOCGAXES, &number_of_axes);
-
-
-4.1 JSIOGCVERSION
-~~~~~~~~~~~~~~~~~
-
-JSIOGCVERSION is a good way to check in run-time whether the running
-driver is 1.0+ and supports the event interface. If it is not, the
-IOCTL will fail. For a compile-time decision, you can test the
-JS_VERSION symbol
-
-	#ifdef JS_VERSION
-	#if JS_VERSION > 0xsomething
-
-
-4.2 JSIOCGNAME
-~~~~~~~~~~~~~~
-
-JSIOCGNAME(len) allows you to get the name string of the joystick - the same
-as is being printed at boot time. The 'len' argument is the length of the
-buffer provided by the application asking for the name. It is used to avoid
-possible overrun should the name be too long.
-
-	char name[128];
-	if (ioctl(fd, JSIOCGNAME(sizeof(name)), name) < 0)
-		strncpy(name, "Unknown", sizeof(name));
-	printf("Name: %s\n", name);
-
-
-4.3 JSIOC[SG]CORR
-~~~~~~~~~~~~~~~~~
-
-For usage on JSIOC[SG]CORR I suggest you to look into jscal.c  They are
-not needed in a normal program, only in joystick calibration software
-such as jscal or kcmjoy. These IOCTLs and data types aren't considered
-to be in the stable part of the API, and therefore may change without
-warning in following releases of the driver.
-
-Both JSIOCSCORR and JSIOCGCORR expect &js_corr to be able to hold
-information for all axis. That is, struct js_corr corr[MAX_AXIS];
-
-struct js_corr is defined as
-
-	struct js_corr {
-		__s32 coef[8];
-		__u16 prec;
-		__u16 type;
-	};
-
-and ``type''
-
-	#define JS_CORR_NONE            0x00    // returns raw values
-	#define JS_CORR_BROKEN          0x01    // broken line
-
-
-5. Backward compatibility
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The 0.x joystick driver API is quite limited and its usage is deprecated.
-The driver offers backward compatibility, though. Here's a quick summary:
-
-	struct JS_DATA_TYPE js;
-	while (1) {
-		if (read (fd, &js, JS_RETURN) != JS_RETURN) {
-			// error
-		}
-		usleep (1000);
-	}
-
-As you can figure out from the example, the read returns immediately,
-with the actual state of the joystick.
-
-	struct JS_DATA_TYPE {
-		int buttons;    // immediate button state
-		int x;          // immediate x axis value
-		int y;          // immediate y axis value
-	};
-
-and JS_RETURN is defined as
-
-	#define JS_RETURN       sizeof(struct JS_DATA_TYPE)
-
-To test the state of the buttons,
-
-	first_button_state  = js.buttons & 1;
-	second_button_state = js.buttons & 2;
-
-The axis values do not have a defined range in the original 0.x driver,
-except for that the values are non-negative. The 1.2.8+ drivers use a
-fixed range for reporting the values, 1 being the minimum, 128 the
-center, and 255 maximum value.
-
-The v0.8.0.2 driver also had an interface for 'digital joysticks', (now
-called Multisystem joysticks in this driver), under /dev/djsX. This driver
-doesn't try to be compatible with that interface.
-
-
-6. Final Notes
-~~~~~~~~~~~~~~
-
-____/|	Comments, additions, and specially corrections are welcome.
-\ o.O|	Documentation valid for at least version 1.2.8 of the joystick
- =(_)=	driver and as usual, the ultimate source for documentation is
-   U	to "Use The Source Luke" or, at your convenience, Vojtech ;)
-
-					- Ragnar
-EOF
-
-
-*/
 
 #include <stdio.h>
 #include <unistd.h>
@@ -367,10 +47,13 @@ EOF
 
 
 
-#define STRING_DEV_JOYSTICK "/dev/input/js0"
+//#define STRING_DEV_JOYSTICK "/dev/input/js0"
+
+char string_dev_joystick[1024]="/dev/input/js0";
 
 int ptr_realjoystick;
 
+//Por defecto dice que esta habilitado. Luego cada driver (o el null) diran si realmente existe o no
 z80_bit realjoystick_present={1};
 
 
@@ -395,35 +78,34 @@ int simulador_joystick_forzado=0;
 //desde '0','1'.. hasta '9'.. y otras adicionales, como espacio
 z80_byte realjoystick_numselect='1';
 
-int realjoystick_hit()
-{
 
 
-    if (simulador_joystick==1) {
-                if (simulador_joystick_forzado==1) {
-			//simulador_joystick_forzado=0;
-			return 1;
-		}
-		else return 0;
-    }
+//Que funcion gestiona el inicio
+int (*realjoystick_init)(void);
+//Funcion de poll
+void (*realjoystick_main)(void);
 
-#ifndef MINGW
-	struct timeval tv = { 0L, 0L };
-	fd_set fds;
-	FD_ZERO(&fds);
-	FD_SET(ptr_realjoystick, &fds);
-	return select(ptr_realjoystick+1, &fds, NULL, NULL, &tv);
-#else
-	//Para windows retornar siempre 0
-	//aunque aqui no llegara, solo para que no se queje el compilador
-	return 0;
-#endif
-}
+//Funcion que dice si se ha pulsado algo en el joystick
+//int (*realjoystick_hit)(void);
+
+int realjoystick_hit=0;
 
 
+int realjoystick_total_buttons=0;
+int realjoystick_total_axes=0;
+char realjoystick_joy_name[REALJOYSTICK_MAX_NAME+1]=""; //+1 por si acaso no me acuerdo del 0 final...
+char realjoystick_driver_name[REALJOYSTICK_MAX_DRIVER_NAME+1]="";
 
 
+//Parametro de "autocalibrado". Valores de axis entre -VALOR y +VALOR, se consideran 0
+//v>-realjoystick_autocalibrate_value && v<realjoystick_autocalibrate_value ->0
+//De momento solo se usa en driver SDL. En nativo linux no usarlo: hasta ahora nunca ha hecho falta, mejor no meterlo
+int realjoystick_autocalibrate_value=16383;
 
+
+//No usar soporte nativo de real joystick de linux y dejar que use el del driver de video (actualmente solo SDL)
+//Ponemos esto aqui como variable global y no dentro de realjoystick_linux
+z80_bit no_native_linux_realjoystick={0};
 
 //asignacion de botones de joystick a funciones
 //posicion 0 del array es para REALJOYSTICK_EVENT_UP
@@ -443,11 +125,14 @@ char *realjoystick_event_names[]={
     "Fire",
     "EscMenu",
     "Enter",
+    "MenuTab",
     "Smartload",
 	"Quicksave",
 	"Osdkeyboard",
+	"Osdtextkb",
 	"NumSelect",
 	"NumAction",
+	"JoySelect",
 	"Aux1",
 	"Aux2",
 	"Aux3",
@@ -471,10 +156,10 @@ int realjoystick_get_event_string(char *texto)
         int i;
 
         for (i=0;i<MAX_EVENTS_JOYSTICK;i++) {
-		if (!strcasecmp(texto,realjoystick_event_names[i])) {
-			debug_printf (VERBOSE_DEBUG,"Event %s has event number: %d",texto,i);
-			return i;
-		}
+			if (!strcasecmp(texto,realjoystick_event_names[i])) {
+				debug_printf (VERBOSE_DEBUG,"Event %s has event number: %d",texto,i);
+				return i;
+			}
         }
 
 
@@ -528,15 +213,21 @@ void realjoystick_clear_events_array(void)
 
 }
 
-
-void realjoystick_set_default_functions(void)
+void realjoystick_init_events_keys_tables(void)
 {
-	//primero desasignamos todos
 	//eventos
 	realjoystick_clear_events_array();
 
 	//y teclas
-	realjoystick_clear_keys_array();
+	realjoystick_clear_keys_array();	
+}
+
+
+void realjoystick_new_set_default_functions(void)
+{
+	//primero desasignamos todos
+	//eventos
+	realjoystick_init_events_keys_tables();
 
 
 	//y luego asignamos algunos por defecto
@@ -622,147 +313,108 @@ Aux2: desasignado
 
 }
 
-//retorna 0 si ok
-//retorna 1 is no existe o error
-int realjoystick_init(void)
+
+int realjoystick_null_init(void)
 {
+	//No inicializa nada. Salir y decir que no hay joystick
+	return 1;
+}
 
-	debug_printf(VERBOSE_INFO,"Initializing real joystick");
+//Null se encarga de driver de joystick cuando no hay joystick pero tambien de gestionar el simulador de joystick
+void realjoystick_null_main(void)
+{
+	if (realjoystick_present.v==0) return;
+	//printf ("realjoystick_null_main\n");
 
-	if (simulador_joystick==1) {
+
+
+	//El null al final le hacemos que desactive el joystick, para que no aparezca joystick en menu
+	//El tema es que se podria hacer cuando se llama a null_init, pero no se llama a realjoystick_null_init
+	//dado que el init del joystick lo tiene que hacer el driver de video (caso de sdl ejemplo), o el linux joystick nativo
+	//en caso del null no llama nadie al init
+	debug_printf (VERBOSE_DEBUG,"Disabling joystick support as we are using the default null driver");
+	realjoystick_present.v=0;
+
+
+}
+
+
+int realjoystick_simulador_init(void)
+{
+	debug_printf (VERBOSE_DEBUG,"realjoystick_simulador_init");
+
+
+
 		printf ("!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
 		        "WARNING: using joystick simulator. Don't enable it on production version. Use F7 key to simulate joystick event\n"
 			"!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 		sleep(4);
-		return 0;
-	}
-
-#ifndef USE_LINUXREALJOYSTICK
-	debug_printf(VERBOSE_INFO,"Linux real joystick support disabled on compilation");
-	return 1;
-#endif
+	
 
 
-#ifndef MINGW
-	ptr_realjoystick=open(STRING_DEV_JOYSTICK,O_RDONLY|O_NONBLOCK);
-	if (ptr_realjoystick==-1) {
-		debug_printf(VERBOSE_INFO,"Unable to open joystick %s : %s",STRING_DEV_JOYSTICK,strerror(errno));
-                return 1;
-        }
-
-
-
-	int flags;
-	if((flags=fcntl(ptr_realjoystick,F_GETFL))==-1)
-	  {
-		  debug_printf(VERBOSE_ERR,"couldn't get flags from joystick device: %s",strerror(errno));
-		  return 1;
-	  }
-	flags &= ~O_NONBLOCK;
-	if(fcntl(ptr_realjoystick,F_SETFL,flags)==-1)
-	  {
-		  debug_printf(VERBOSE_ERR,"couldn't set joystick device non-blocking: %s",strerror(errno));
-		  return 1;
-	  }
-
-
-	/*if (fcntl(ptr_realjoystick, F_SETFL, O_NONBLOCK)==-1)
-          {
-                  debug_printf(VERBOSE_ERR,"couldn't set joystick device non-blocking: %s",strerror(errno));
-                  return 1;
-          }
-	*/
-
-
-	realjoystick_present.v=1;
-
+	strcpy(realjoystick_joy_name,"Joystick simulator");
+	realjoystick_total_axes=255;
+	realjoystick_total_buttons=255;
+	strcpy(realjoystick_driver_name,"Simulator");
 	return 0;
-#endif
-
 }
 
-void read_simulador_joystick(int fd,struct js_event *e,int bytes)
+
+void read_simulador_joystick(void)
 {
-
-	int value,type,number;
-
-	printf ("button number: ");
-	scanf ("%d",&number);
-
-        printf ("button type: (%d=button, %d=axis)",JS_EVENT_BUTTON,JS_EVENT_AXIS);
-        scanf ("%d",&type);
-
-        printf ("button value: ");
-        scanf ("%d",&value);
-
-	e->number=number;
-	e->type=type;
-	e->value=value;
-
 	simulador_joystick_forzado=0;
 
-	//para que no salte warning de no usado
-	fd++;
-	bytes++;
+	int value,type,button;
+
+	printf ("Button number: ");
+	scanf ("%d",&button);
+	if (button<0 || button>255) {
+		printf ("Invalid button number\n");
+		return;
+	}
+
+	printf ("Button type: (%d=button, %d=axis)",REALJOYSTICK_INPUT_EVENT_BUTTON,REALJOYSTICK_INPUT_EVENT_AXIS);
+	scanf ("%d",&type);
+
+	printf ("Button value: ");
+	scanf ("%d",&value);
+
+	if (value<-32767 || value>32767) {
+		printf ("Invalid value\n");
+		return;
+	}	
+
+	printf ("OK simulating joystick button/axis: button: %d type: %d value: %d\n",button,type,value);
+
+	realjoystick_hit=1;
+
+	menu_info_joystick_last_raw_value=value;
+
+	realjoystick_common_set_event(button,type,value);
+
+
+
+
 
 
 }
 
 
-//lectura de evento de joystick
-//devuelve 0 si no hay nada
-int realjoystick_read_event(int *button,int *type,int *value)
+//Null se encarga de driver de joystick cuando no hay joystick pero tambien de gestionar el simulador de joystick
+void realjoystick_simulador_main(void)
 {
-	//debug_printf(VERBOSE_INFO,"Reading joystick event");
+	if (realjoystick_present.v==0) return;
+	//printf ("realjoystick_simulador_main\n");
 
-	struct js_event e;
-
-	if (!realjoystick_hit()) return 0;
-
-	if (simulador_joystick==1) {
-		read_simulador_joystick(ptr_realjoystick, &e, sizeof(e));
+	if (simulador_joystick_forzado) {
+		read_simulador_joystick();
 	}
-
-	else {
-		int leidos=read (ptr_realjoystick, &e, sizeof(e));
-		if (leidos<0) {
-			debug_printf (VERBOSE_ERR,"Error reading real joystick. Disabling it");
-			realjoystick_present.v=0;
-		}
-	}
-
-	debug_printf (VERBOSE_DEBUG,"event: time: %d value: %d type: %d number: %d",e.time,e.value,e.type,e.number);
-
-	*button=e.number;
-	*type=e.type;
-	*value=e.value;
-
-
-	int t=e.type;
-
-	if ( (t&JS_EVENT_INIT)==JS_EVENT_INIT) {
-		debug_printf (VERBOSE_DEBUG,"JS_EVENT_INIT");
-		t=t&127;
-	}
-
-	if (t==JS_EVENT_BUTTON) debug_printf (VERBOSE_DEBUG,"JS_EVENT_BUTTON");
-
-	if (t==JS_EVENT_AXIS) debug_printf (VERBOSE_DEBUG,"JS_EVENT_AXIS");
-
-	/*
-	Movimientos sobre mismo eje son asi:
-	-boton 0: axis x. en negativo, hacia izquierda. en positivo, hacia derecha
-	-boton 1: axis y. en negativo, hacia arriba. en positivo, hacia abajo
-
-	Con botones normales, no ejes:
-	-valor 1: indica boton pulsado
-	-valor 0: indica boton liberado
-
-	*/
-
-	return 1;
 
 }
+
+
+
+
 
 //Retorna indice o -1 si no encontrado
 int realjoystick_find_event_or_key(int indice_inicial,realjoystick_events_keys_function *tabla,int maximo,int button,int type,int value)
@@ -773,10 +425,10 @@ int realjoystick_find_event_or_key(int indice_inicial,realjoystick_events_keys_f
 			if (tabla[i].button==button) {
 
 				//boton normal. no axis
-				if (type==JS_EVENT_BUTTON && tabla[i].button_type==0) return i;
+				if (type==REALJOYSTICK_INPUT_EVENT_BUTTON && tabla[i].button_type==0) return i;
 
 
-				if (type==JS_EVENT_AXIS) {
+				if (type==REALJOYSTICK_INPUT_EVENT_AXIS) {
 
 					//ver si coindice el axis
 					if (tabla[i].button_type==+1) {
@@ -817,6 +469,26 @@ int realjoystick_find_key(int indice_inicial,int button,int type,int value)
         return realjoystick_find_event_or_key(indice_inicial,realjoystick_keys_array,MAX_KEYS_JOYSTICK,button,type,value);
 }
 
+//Busca evento en tabla segun numero de boton y tipo
+int realjoystick_buscar_evento_en_tabla(int button, int button_type)
+{
+/*
+	//numero de boton
+	int button;
+
+	//tipo de boton: 0-boton normal, +1 axis positivo, -1 axis negativo
+	int button_type;
+*/
+//realjoystick_events_keys_function realjoystick_events_array[MAX_EVENTS_JOYSTICK];
+	int i;
+
+	for (i=0;i<MAX_EVENTS_JOYSTICK;i++) {
+		if (realjoystick_events_array[i].asignado.v &&
+			realjoystick_events_array[i].button==button && realjoystick_events_array[i].button_type==button_type) return i;
+	}
+
+	return -1;
+}
 
 
 void realjoystick_print_char(z80_byte caracter)
@@ -838,9 +510,16 @@ void realjoystick_print_char(z80_byte caracter)
 
 	sprintf (buffer_mensaje,"Key: %c",caracter);
 
-	//menu_putchar_footer(SECOND_OVERLAY_X_JOYSTICK,1,caracter,7+8,0);
+	screen_print_splash_text_center(ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,buffer_mensaje);
 
-	screen_print_splash_text(10,ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,buffer_mensaje);
+
+}
+
+void realjoystick_print_joyselect(void)
+{
+	char buffer_mensaje[64];
+	sprintf (buffer_mensaje,"Set joystick type: %s",joystick_texto[joystick_emulation]);
+	screen_print_splash_text_center(ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,buffer_mensaje);
 
 
 }
@@ -862,8 +541,7 @@ void realjoystick_set_reset_key(int index,int value)
 
         else {
 		debug_printf (VERBOSE_DEBUG,"reset key %c",tecla);
-		ascii_to_keyboard_port_set_clear(tecla,0);
-		//reset_keyboard_ports();
+		ascii_to_keyboard_port_set_clear(tecla,0);	
 	}
 
 }
@@ -875,24 +553,7 @@ void realjoystick_send_f_function(int accion)
       menu_button_f_function.v=1;
       menu_button_f_function_action=accion;
       menu_abierto=1;
-	  /*
 
-		//Entrada
-		//menu_espera_no_tecla();
-		osd_kb_no_mostrar_desde_menu=0; //Volver a permitir aparecer teclado osd
-
-		//Procesar comandos F
-
-		//menu_button_f_function.v=1;
-      	//menu_button_f_function_index=F_FUNCION_QUICKSAVE;
-      	menu_abierto=1;
-		menu_process_f_functions_by_action(accion);
-
-		menu_muestra_pending_error_message(); //Si se genera un error derivado de funcion F
-		cls_menu_overlay();
-
-		menu_abierto=0;
-	*/
 }
 
 //si value=0, es reset
@@ -902,29 +563,29 @@ void realjoystick_set_reset_action(int index,int value)
 
 	switch (index) {
 		case REALJOYSTICK_EVENT_UP:
-			if (value) joystick_set_up();
-			else joystick_release_up();
+			if (value) joystick_set_up(1);
+			else joystick_release_up(1);
 		break;
 
 		case REALJOYSTICK_EVENT_DOWN:
-			 if (value) joystick_set_down();
-			 else joystick_release_down();
+			 if (value) joystick_set_down(1);
+			 else joystick_release_down(1);
 		break;
 
-                case REALJOYSTICK_EVENT_LEFT:
-                         if (value) joystick_set_left();
-                         else joystick_release_left();
-                break;
+		case REALJOYSTICK_EVENT_LEFT:
+			if (value) joystick_set_left(1);
+			else joystick_release_left(1);
+		break;
 
-                case REALJOYSTICK_EVENT_RIGHT:
-                         if (value) joystick_set_right();
-                         else joystick_release_right();
-                break;
+		case REALJOYSTICK_EVENT_RIGHT:
+			if (value) joystick_set_right(1);
+			else joystick_release_right(1);
+		break;
 
-                case REALJOYSTICK_EVENT_FIRE:
-                         if (value) joystick_set_fire();
-                         else joystick_release_fire();
-                break;
+		case REALJOYSTICK_EVENT_FIRE:
+			if (value) joystick_set_fire(1);
+			else joystick_release_fire(1);
+		break;
 
 
 		//Evento de ESC representa ESC para navegar entre menus y tambien abrir el menu (lo que ahora es con F5 y antes era ESC)
@@ -932,13 +593,25 @@ void realjoystick_set_reset_action(int index,int value)
 		case REALJOYSTICK_EVENT_ESC_MENU:
                                 if (value) {
                                         puerto_especial1 &=255-1;
-                                        if (util_if_open_just_menu() ) menu_abierto=1;
+                                        if (util_if_open_just_menu() ) menu_fire_event_open_menu();
                                 }
                                 else {
                                         puerto_especial1 |=1;
                                 }
 
 		break;
+
+
+                case REALJOYSTICK_EVENT_MENU_TAB:
+			//printf ("Event menutab %d\n",value);
+                                if (value) {
+					menu_tab.v=1;
+                                }
+                                else {
+                                        menu_tab.v=0;
+                                }
+
+                break;
 
 		case REALJOYSTICK_EVENT_NUMBERSELECT:
 
@@ -978,6 +651,14 @@ void realjoystick_set_reset_action(int index,int value)
 			}
 		break;
 
+
+		case REALJOYSTICK_EVENT_JOYSELECT:
+			if (value) {
+				joystick_cycle_next_type();
+				realjoystick_print_joyselect();
+			}
+		break;
+
 		case REALJOYSTICK_EVENT_ENTER:
 
 			if (value) puerto_49150 &=255-1;
@@ -988,7 +669,7 @@ void realjoystick_set_reset_action(int index,int value)
 		case REALJOYSTICK_EVENT_QUICKLOAD:
 			if (value) {
 				menu_abierto=1;
-				menu_button_quickload.v=1;
+				menu_button_smartload.v=1;
 			}
 		break;
 
@@ -1008,117 +689,22 @@ void realjoystick_set_reset_action(int index,int value)
 	                        }
                 break;
 
+		case REALJOYSTICK_EVENT_OSD_TEXT_KEYBOARD:
+				if (value) {
+        	                        menu_abierto=1;
+                	                menu_button_osd_adv_keyboard_openmenu.v=1;
+	                        }
+                break;
+
 
 	}
 
 }
 
 
-//Variables leidas desde menu para el comprobador de joystick
-int realjoystick_last_button,realjoystick_last_type,realjoystick_last_value,realjoystick_last_index;
-
-//lectura de evento de joystick y conversion a movimiento de joystick spectrum
-void realjoystick_main(void)
-{
-
-
-	if (realjoystick_present.v==0) return;
-
-	int button,type,value;
-
-	while (realjoystick_read_event(&button,&type,&value) ==1 && realjoystick_present.v) {
-		//eventos de init no hacerles caso, de momento
-		if ( (type&JS_EVENT_INIT)!=JS_EVENT_INIT) {
-
-			realjoystick_last_button=button;
-			realjoystick_last_type=type;
-			realjoystick_last_value=value;
-			
-
-			//buscamos el evento
-			int index=-1;
-			do {
-			index=realjoystick_find_event(index+1,button,type,value);
-			//realjoystick_last_index=index;
-			//printf ("last index: %d\n",realjoystick_last_index);
-			if (index>=0) {
-				debug_printf (VERBOSE_DEBUG,"Event found on index: %d",index);
-
-				realjoystick_last_index=index;
-
-				//ver tipo boton normal
-
-				if (type==JS_EVENT_BUTTON) {
-					realjoystick_set_reset_action(index,value);
-				}
-
-
-				//ver tipo axis
-				if (type==JS_EVENT_AXIS) {
-					switch (index) {
-						case REALJOYSTICK_EVENT_UP:
-							//reset abajo
-							joystick_release_down();
-							realjoystick_set_reset_action(index,value);
-						break;
-
-                                                case REALJOYSTICK_EVENT_DOWN:
-                                                        //reset arriba
-                                                        joystick_release_up();
-                                                        realjoystick_set_reset_action(index,value);
-                                                break;
-
-                                                case REALJOYSTICK_EVENT_LEFT:
-                                                        //reset derecha
-                                                        joystick_release_right();
-                                                        realjoystick_set_reset_action(index,value);
-                                                break;
-
-                                                case REALJOYSTICK_EVENT_RIGHT:
-                                                        //reset izquierda
-                                                        joystick_release_left();
-                                                        realjoystick_set_reset_action(index,value);
-                                                break;
 
 
 
-						default:
-							//acciones que no son de axis
-							realjoystick_set_reset_action(index,value);
-						break;
-					}
-				}
-
-					//gestionar si es 0, poner 0 en izquierda y derecha por ejemplo (solo para acciones de left/right/up/down)
-
-					//si es >0, hacer que la accion de -1 se resetee (solo para acciones de left/right/up/down)
-					//si es <0, hacer que la accion de +1 se resetee (solo para acciones de left/right/up/down)
-			}
-			} while (index>=0);
-
-			//despues de evento, buscar boton a tecla
-			//buscamos el evento
-			index=-1;
-			do {
-                        index=realjoystick_find_key(index+1,button,type,value);
-                        if (index>=0) {
-                                debug_printf (VERBOSE_DEBUG,"evento encontrado en indice: %d. tecla=%c value:%d",index,realjoystick_keys_array[index].caracter,value);
-
-                                //ver tipo boton normal o axis
-
-                                if (type==JS_EVENT_BUTTON || type==JS_EVENT_AXIS) {
-                                        realjoystick_set_reset_key(index,value);
-                                }
-			}
-			} while (index>=0);
-
-
-
-		}
-
-	}
-
-}
 
 
 int realjoystick_find_if_already_defined_button(realjoystick_events_keys_function *tabla,int maximo,int button,int type)
@@ -1142,28 +728,27 @@ int realjoystick_redefine_event_key(realjoystick_events_keys_function *tabla,int
 
 	menu_espera_no_tecla();
 
-        //leemos boton
-        int button,type,value;
+	realjoystick_hit=0;
 
-	debug_printf (VERBOSE_DEBUG,"redefine action: %d",indice);
+	//leemos boton
+	int button,type,value;
+
+	debug_printf (VERBOSE_DEBUG,"Redefine action: %d",indice);
+
+	//printf ("Redefine action: %d\n",indice);
 
 	simulador_joystick_forzado=1;
 
 	menu_espera_tecla_o_joystick();
 
-	/*
-	while (!realjoystick_hit()) {
-		//sleep(1);
-		menu_espera_tecla();
-		//si se pulsa
-	}
-	*/
+
 
 	simulador_joystick_forzado=1;
 
 	//si no se ha pulsado joystick, pues se habra pulsado tecla
-	if (!realjoystick_hit() ) {
+	if (!realjoystick_hit ) {
 		debug_printf (VERBOSE_DEBUG,"Pressed key, not joystick");
+		//printf ("Pressed key, not joystick\n");
 		return 0;
 	}
 
@@ -1171,22 +756,28 @@ int realjoystick_redefine_event_key(realjoystick_events_keys_function *tabla,int
 	debug_printf (VERBOSE_DEBUG,"Pressed joystick");
 
 
-        //while (realjoystick_read_event(&button,&type,&value) ==1 ) {
-	if (realjoystick_read_event(&button,&type,&value) ==1 ) {
+			button=menu_info_joystick_last_button;
+
+			type=menu_info_joystick_last_type;
+			value=menu_info_joystick_last_value;
+
+	//if (1) {
+	//if (realjoystick_read_event(&button,&type,&value) ==1 ) {
 		debug_printf (VERBOSE_DEBUG,"redefine for button: %d type: %d value: %d",button,type,value);
+		//printf ("redefine for button: %d type: %d value: %d\n",button,type,value);
                 //eventos de init no hacerles caso, de momento
-                if ( (type&JS_EVENT_INIT)!=JS_EVENT_INIT) {
+		if ( (type&REALJOYSTICK_INPUT_EVENT_INIT)!=REALJOYSTICK_INPUT_EVENT_INIT) {
 			debug_printf (VERBOSE_DEBUG,"redefine for button: %d type: %d value: %d",button,type,value);
 
 			int button_type=0;
 
 
-                        if (type==JS_EVENT_BUTTON) {
+                        if (type==REALJOYSTICK_INPUT_EVENT_BUTTON) {
                                 //tabla[indice].button_type=0;
 				button_type=0;
                         }
 
-                        if (type==JS_EVENT_AXIS) {
+                        if (type==REALJOYSTICK_INPUT_EVENT_AXIS) {
                                 //if (value<0) tabla[indice].button_type=-1;
                                 //else tabla[indice].button_type=+1;
                                 if (value<0) button_type=-1;
@@ -1204,19 +795,19 @@ int realjoystick_redefine_event_key(realjoystick_events_keys_function *tabla,int
 				return 0;
 			}
 
-                        tabla[indice].asignado.v=1;
+			tabla[indice].asignado.v=1;
 			tabla[indice].button=button;
 			tabla[indice].button_type=button_type;
 
-                }
+			}
 
 
-        }
+    //}
 
 	return 1;
 }
 
-//redefinir evento
+
 //redefinir evento
 //Devuelve 1 si ok
 //0 si salimos con ESC
@@ -1288,22 +879,22 @@ int realjoystick_set_button_event(char *text_button, char *text_event)
 
 //--joystickevent but evt    Set a joystick button or axis to an event (changes joystick to event table)
 
-                                //obtener boton
-                                int button,button_type;
-                                realjoystick_get_button_string(text_button,&button,&button_type);
+				//obtener boton
+				int button,button_type;
+				realjoystick_get_button_string(text_button,&button,&button_type);
 
-                                //obtener evento
-                                int evento=realjoystick_get_event_string(text_event);
-                                if (evento==-1) {
+				//obtener evento
+				int evento=realjoystick_get_event_string(text_event);
+				if (evento==-1) {
 					debug_printf (VERBOSE_ERR,"Unknown event %s",text_event);
 					return 1;
-                                }
+				}
 
 
-                                //Y definir el evento
-                                realjoystick_events_array[evento].asignado.v=1;
-                                realjoystick_events_array[evento].button=button;
-                                realjoystick_events_array[evento].button_type=button_type;
+				//Y definir el evento
+				realjoystick_events_array[evento].asignado.v=1;
+				realjoystick_events_array[evento].button=button;
+				realjoystick_events_array[evento].button_type=button_type;
 
 	return 0;
 }
@@ -1376,3 +967,152 @@ int realjoystick_set_event_key(char *text_event,char *text_key)
                                 joystickkey_definidas++;
 	return 0;
 }
+
+
+
+
+
+//lectura de evento de joystick y conversion a movimiento de joystick spectrum
+void realjoystick_common_set_event(int button,int type,int value)
+{
+
+
+		//eventos de init no hacerles caso, de momento
+		if ( (type&REALJOYSTICK_INPUT_EVENT_INIT)!=REALJOYSTICK_INPUT_EVENT_INIT) {
+
+
+	
+
+			menu_info_joystick_last_button=button;
+
+			menu_info_joystick_last_type=type;
+			menu_info_joystick_last_value=value;
+
+			menu_info_joystick_last_index=-1; //de momento suponemos ningun evento
+			
+
+			//buscamos el evento
+			int index=-1;
+			do  {
+
+				index=realjoystick_find_event(index+1,button,type,value);
+				//menu_info_joystick_last_index=index;
+				//printf ("last index: %d\n",menu_info_joystick_last_index);
+				if (index>=0) {
+					debug_printf (VERBOSE_DEBUG,"Event found on index: %d",index);
+
+					menu_info_joystick_last_index=index;
+
+					//ver tipo boton normal
+
+					if (type==REALJOYSTICK_INPUT_EVENT_BUTTON) {
+						realjoystick_set_reset_action(index,value);
+					}
+
+
+					//ver tipo axis
+					if (type==REALJOYSTICK_INPUT_EVENT_AXIS) {
+						switch (index) {
+							case REALJOYSTICK_EVENT_UP:
+								//reset abajo
+								joystick_release_down(1);
+								realjoystick_set_reset_action(index,value);
+							break;
+
+							case REALJOYSTICK_EVENT_DOWN:
+									//reset arriba
+									joystick_release_up(1);
+									realjoystick_set_reset_action(index,value);
+							break;
+
+							case REALJOYSTICK_EVENT_LEFT:
+									//reset derecha
+									joystick_release_right(1);
+									realjoystick_set_reset_action(index,value);
+							break;
+
+							case REALJOYSTICK_EVENT_RIGHT:
+									//reset izquierda
+									joystick_release_left(1);
+									realjoystick_set_reset_action(index,value);
+							break;
+
+
+
+							default:
+								//acciones que no son de axis
+								realjoystick_set_reset_action(index,value);
+							break;
+						}
+					}
+
+					//gestionar si es 0, poner 0 en izquierda y derecha por ejemplo (solo para acciones de left/right/up/down)
+
+					//si es >0, hacer que la accion de -1 se resetee (solo para acciones de left/right/up/down)
+					//si es <0, hacer que la accion de +1 se resetee (solo para acciones de left/right/up/down)
+				}
+			} while (index>=0);
+
+			//despues de evento, buscar boton a tecla
+			//buscamos el evento
+			index=-1;
+			do {
+                        index=realjoystick_find_key(index+1,button,type,value);
+                        if (index>=0) {
+                                debug_printf (VERBOSE_DEBUG,"Event found on index: %d. key=%c value:%d",index,realjoystick_keys_array[index].caracter,value);
+
+                                //ver tipo boton normal o axis
+
+                                if (type==REALJOYSTICK_INPUT_EVENT_BUTTON || type==REALJOYSTICK_INPUT_EVENT_AXIS) {
+                                        realjoystick_set_reset_key(index,value);
+                                }
+			}
+			} while (index>=0);
+
+
+
+		}
+
+
+
+}
+
+
+
+
+
+void realjoystick_initialize_joystick(void)
+{
+
+
+
+	//Si viene desactivado por config, decir que no esta
+	if (realjoystick_disabled.v) realjoystick_present.v=0;
+
+	else {
+
+		//Si tenemos el simulador de joystick, decir que esta presente y usar funciones del simulador
+		if (simulador_joystick) {
+			realjoystick_init=realjoystick_simulador_init;
+			realjoystick_main=realjoystick_simulador_main;
+		}
+
+
+			if (realjoystick_init()) {
+				realjoystick_present.v=0;
+			}
+	}	
+}
+
+
+int realjoystick_is_linux_native(void)
+{
+#ifdef USE_LINUXREALJOYSTICK
+
+	if (no_native_linux_realjoystick.v==0) return 1;
+
+#endif
+
+	return 0;
+}
+

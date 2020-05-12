@@ -18,7 +18,7 @@ I want to thank the help and the collaboration of the following people (date sor
 -Alfonso Saavedra "Son Link", for testing and suggestions to my emulator
 -Dave Hughes, for granting permission to include El Stompo, Sun Bucket and others
 -Einar Saukas, for granting permission to include KnightsDemonsDX, NirvanaEngine, BifrostEngine and others
--Miguel Angel Rodriguez Jodar, for lots of information about Inves Spectrum+
+-Miguel Angel Rodriguez Jodar, for lots of information about all Spectrum models
 -Marcos Cruz (programandala.net), for the Spool File idea, lots of suggestions, help with TR-DOS and bug reporting
 -Stefano Bodrato, for granting permission to include Wall game for ZX81
 -Kit O'Saoraidhe, for granting permission to include some of his ZX80 programs found at http://zx80programs.yolasite.com/
@@ -51,7 +51,7 @@ I want to thank the help and the collaboration of the following people (date sor
 -Yerzmyey, for granting permission to include his Astral Combat demo. http://yerzmyey.i-demo.pl/ . http://hooyprogram.republika.pl/
 -JSJ, helping me with pthreads on Windows version
 -Miodrag Milanovic, for granting permission to include his National Semiconductor SC/MP CPU Emulator https://github.com/mamedev/mame/blob/master/src/devices/cpu/scmp/ . Distributed under BSD-3 license
--Tim Gilberts, for bug reporting
+-Tim Gilberts, for bug reporting and the Sped translation to English
 -Gary Lancaster, for bug reporting
 -Mark Hutchings, for bug reporting, proposing new features and code contribution
 -g0blinish/Krapivin Dmitry, for granting permission to include some demos and games for TSConf
@@ -60,13 +60,31 @@ I want to thank the help and the collaboration of the following people (date sor
 -Till Harbaum, helping me with QL emulation and mdvtool 
 -Simone Voltolini, for recovering my old QL Microdrives
 -Richard Atkinson, for the real Speccy 16/48/+ colour palette
--Jordi Bayo Montiel (again) for the additional and beautiful ZEsarUX logos
+-Jordi Bayo Montiel (again) for the first Windows compilations and the additional and beautiful ZEsarUX logos
 -Roberto (zenvoid), for reporting me the bug with the IFF2 behaviour when firing an interrupt
 -Hacker VBI (Burenko Vladimir, Ukraine), for granting permission to include some demos and games for TSConf
+-zup, for creating the Spectrum rom files which contain Mantransfer
+-Robin Verhagen-Guest, helping me with the MB02/Next DMA
+-Gari Biasillo, for reporting bugs in the esxdos handler
+-Thomas Busse, for bug reporting and the fast debug parser proposal
+-Jose Luis Rodriguez Godoy, testing Inves features and reporting bugs
+-Damien Guard, for the ZX Chicago font
+-Peter Ped Helcmanovsky, for lots of TBBlue code contributions and bug reporting
+-Derek Bolli, testing the ZEsarUX Network Gaming feature
+-desUBIKado, testing the ZEsarUX Network Gaming feature
+-ZXwebmaster, allowing me to use his web site www.zx81.nl in the ZX81 online game browser
+-Raul Carrillo (metsuke) granting permission to add his game "The Big Javi's Adventure"
+-Thomas Kolbeck, adapting the zxinfo api for the ZEsarUX speccy game browser
+-Cesar Wagener, for Windows bug reporting
+-Alone Coder, for granting permission to add Pang and Ball Quest 16C color mode games, and for information about ATM computer
+-Шарихин Александр Сергеевич, for granting permission to add his "Touhou Zero. Lost Donation Box Incident" game, for help and suggestions 
+-Stefan Bylund, helping me with tbblue layer2 extended modes
+
 
 -Everyone at several forums about Spectrum, ZX80, ZX81, Z88, Raspberry Pi, etc for all the suggestions to my emulator
 -Everyone who test the beta and stable versions of the emulator and report bugs
--The following people who donated to ZEsarUX: Peter Jones, Daniel Leon Gonzalez, Jose Luis Fernandez Mayoralas, Francisco Gaytan Muñoz
+-The following people who donated to ZEsarUX, in chronological order: Peter Jones, Daniel Leon Gonzalez, Jose Luis Fernandez Mayoralas, Francisco Gaytan Muñoz, Miguel Barrio Orsikowsky, Мухаметов Амин, Geoffrey Wearmouth, Шарихин Александр Сергеевич, anonymous person, Chibiakumas.com, Marcos Lima
 -Anyone who makes demos for the Spectrum, they are a good field of testing for my emulator.
 
 And mainly to this big genius, Clive Sinclair.
+

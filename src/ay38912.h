@@ -49,6 +49,7 @@ extern z80_byte ay_3_8912_registros[][16];
 
 //#define FRECUENCIA_AY (MACHINE_IS_CPC ? 1000000 : 1773400)
 
+extern z80_bit aymidi_rs232_enabled;
 
 #define FRECUENCIA_AY (ay_chip_frequency)
 
@@ -86,5 +87,21 @@ extern int ay_retorna_numero_chips(void);
 extern void set_total_ay_chips(int total);
 
 extern int ay_chip_selected;
+
+extern int ay_retorna_frecuencia(int registro,int chip);
+
+extern char da_output_ay_izquierdo(void);
+extern char da_output_ay_derecho(void);
+
+extern int ay3_stereo_mode;
+
+extern int ay3_custom_stereo_A;
+extern int ay3_custom_stereo_B;
+extern int ay3_custom_stereo_C;
+
+extern z80_byte ay_retorna_mixer_register(int chip);
+
+extern z80_byte ay_filtros[];
+extern void ay_init_filters(void);
 
 #endif

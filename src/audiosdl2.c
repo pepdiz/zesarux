@@ -61,6 +61,8 @@ int audiosdl_init(void)
 {
 
 
+	//audio_driver_accepts_stereo.v=1;
+
 
 	//buffer_actual=audio_buffer_one;
 
@@ -81,7 +83,7 @@ int audiosdl_init(void)
 	/* Set the audio format */
 	wanted.freq = FRECUENCIA_SONIDO;
 	wanted.format = AUDIOSDL_AUDIO_FORMAT;
-	wanted.channels = 1;    /* 1 = mono, 2 = stereo */
+	wanted.channels = 2;    /* 1 = mono, 2 = stereo */
 	wanted.samples = audiosdl_samples;  /* 1024 -> Good low-latency value for callback */
 	wanted.callback = audiosdl_callback;
 	wanted.userdata = NULL;
@@ -180,12 +182,12 @@ void audiosdl_empty_buffer(void)
 int audiosdl_fifo_buffer_size_multiplier=2;
 int audiosdl_return_fifo_buffer_size(void)
 {
-  return AUDIO_BUFFER_SIZE*audiosdl_fifo_buffer_size_multiplier;
+  return AUDIO_BUFFER_SIZE*audiosdl_fifo_buffer_size_multiplier*2; //*2 porque es stereo
 }
 
 
 //nuestra FIFO. De tamayo maximo. Por defecto es x2 y llega hasta xMAX_AUDIOCOREAUDIO_FIFO_MULTIPLIER
-char audiosdl_fifo_sdl_buffer[AUDIO_BUFFER_SIZE*MAX_AUDIOSDL_FIFO_MULTIPLIER];
+char audiosdl_fifo_sdl_buffer[AUDIO_BUFFER_SIZE*MAX_AUDIOSDL_FIFO_MULTIPLIER*2]; //*2 porque es stereo
 
 
 //retorna numero de elementos en la fifo
@@ -228,6 +230,11 @@ void audiosdl_fifo_sdl_write(char *origen,int longitud)
 			return;
 		}
 
+		//Canal izquierdo
+		audiosdl_fifo_sdl_buffer[audiosdl_fifo_sdl_write_position]=*origen++;
+		audiosdl_fifo_sdl_write_position=audiosdl_fifo_sdl_next_index(audiosdl_fifo_sdl_write_position);
+
+		//Canal derecho
 		audiosdl_fifo_sdl_buffer[audiosdl_fifo_sdl_write_position]=*origen++;
 		audiosdl_fifo_sdl_write_position=audiosdl_fifo_sdl_next_index(audiosdl_fifo_sdl_write_position);
 	}
@@ -269,7 +276,7 @@ void audiosdl_fifo_sdl_read(char *destino,int longitud)
 
 int contador_buffer_sonido=0;
 
-char temporary_audiosdl_fifo_sdl_buffer[AUDIO_BUFFER_SIZE*MAX_AUDIOSDL_FIFO_MULTIPLIER];
+char temporary_audiosdl_fifo_sdl_buffer[AUDIO_BUFFER_SIZE*MAX_AUDIOSDL_FIFO_MULTIPLIER*2];
 
 //ver http://www.libsdl.org/release/SDL-1.2.15/docs/html/guideaudioexamples.html
 

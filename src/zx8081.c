@@ -116,6 +116,34 @@ z80_byte caracteres_ascii_zx81[]={
 };
 
 
+//Pasar de ascii a zx80. Empezando por el 32
+
+z80_byte caracteres_ascii_zx80[]={
+//  !  "  #  $  %  &  '  (  )  *  +  ,  -  .  /  0  1  2  3  4  5  6  7  8  9
+0, 15,11,15,13,15,15,15,16,17,20,19,26,18,27,21,28,29,30,31,32,33,34,35,36,37,
+
+// :   ;  <  =  >  ?  @  A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S  T  U  V  W  X  Y  Z
+   14,25,24,22,23,15,15,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,
+
+//     [  \  ]  ^  _  `  a  b  c  d  e  f  g  h  i  j  k  l  m  n  o  p  q  r  s  t  u  v  w  x  y  z
+      15,15,15,15,15,15,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,
+
+// {  |  }  ~  127
+   15,15,15,15,15
+};
+
+/*
+Diferencias entre set de caracteres del zx81 y zx80
+zx80 tiene en la posicion 1 , el "
+Despues de ?(), en posicion 18:
+
+       18 19 20 21 22 23 24
+-zx80: -  +  *  /  =  >  < 
+
+-zx81: >  <  =  +  -  *  / 
+*/
+
+
 z80_bit nmi_generator_active;
 z80_bit hsync_generator_active;
 
@@ -227,6 +255,13 @@ z80_byte ascii_to_zx81(z80_byte c)
 	else return caracteres_ascii_zx81[c-32];
 }
 
+z80_byte ascii_to_zx80(z80_byte c)
+{
+	//?
+	if (c<32 || c>127) return 15;
+
+	else return caracteres_ascii_zx80[c-32];
+}
 
 //z80_bit ejecutado_zona_pantalla;
 
@@ -240,7 +275,7 @@ void enable_wrx(void)
 	}
   
 	if (wrx_present.v==0) {
-		screen_print_splash_text(10,ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,"Enabling WRX video mode");
+		screen_print_splash_text_center(ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,"Enabling WRX video mode");
 		debug_printf (VERBOSE_INFO,"Enabling WRX video mode");
 	}
 
@@ -477,7 +512,7 @@ void enable_chroma81(void)
 		debug_printf (VERBOSE_WARN,"Chroma 81 is not supported on curses or stdout drivers");
 	}
 	else {
-		if (chroma81.v==0) screen_print_splash_text(10,ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,"Enabling Chroma81 video mode");
+		if (chroma81.v==0) screen_print_splash_text_center(ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,"Enabling Chroma81 video mode");
 		chroma81.v=1;
 	}
 

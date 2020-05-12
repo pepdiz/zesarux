@@ -62,17 +62,17 @@ D3 Ruido en el canal A
 D2 Tono en el canal C
 D1 Tono en el canal B
 DO Tono en el canal A
-Seccion 30. Informaci~n de referencia
+Seccion 30. Informacion de referencia
 309
-Este registro controla la mezcla de ruido y tono para cada canal y la direc i~n
-puerta de E/S de o~ho bits. Un cero en un bit de mezcla indica que la funci~n
-a~tivada.
+Este registro controla la mezcla de ruido y tono para cada canal y la direccion
+puerta de E/S de ocho bits. Un cero en un bit de mezcla indica que la funcion
+activada.
 
 R8 � Control de amplitud del ca~al A
 R9 � Control de amplitud del canal B
 RA � Control de amplitud del canal C
 D4
-l=utilizar generador de envolvente
+1=utilizar generador de envolvente
 O=utilizar el valor de D3-DO como amplitud
 D3-DO Amplitud
 Estos tres registros controlan la amplitud de cada canal y si esta debe ser modul~h
@@ -89,9 +89,8 @@ D3 Continua
 D2 Ataque
 Dl Alternada
 DO Sostenida
-El diagrama de las formas de envolvente (Seccion 19 de este capitulo) da una ilustraci~n
-gr
-fica de los posibles estados de este registro.
+El diagrama de las formas de envolvente (Seccion 19 de este capitulo) da una ilustración
+gráfica de los posibles estados de este registro.
 
 Si est~ conectada la unidad de disquete externa, su control lo realiza el circuito controla-
 dor ~PD765A del interfaz externo. Tal como explicamos en la Secci~n 23, el registro dc
@@ -105,12 +104,13 @@ ULA, Y est~ accesible en el bit 4 dc la direc~.i~n 1FFDh (8189). El estado de la
 procedente de la impresora puede ser leido en el bit 0 de la direccion OFFDh (4093).
 310
 
+RE, RF: Registros de AY-RS232 para midi externo
 
 
 */
 
 #include <stdio.h>
-#include <math.h>
+//#include <math.h>
 
 
 #include "ay38912.h"
@@ -118,6 +118,7 @@ procedente de la impresora puede ser leido en el bit 0 de la direccion OFFDh (40
 #include "audio.h"
 #include "debug.h"
 #include "joystick.h"
+
 
 //Indica si esta presente el chip o no
 z80_bit ay_chip_present;
@@ -217,8 +218,11 @@ z80_int randomize_noise[MAX_AY_CHIPS];
 //Fin variables que dependen del chip activo
 //
 
-
-
+//Mascara para bits no usados en registros de chip
+z80_byte ay_mascara_registros[16]={
+  0xff, 0x0f, 0xff, 0x0f, 0xff, 0x0f, 0x1f, 0xff,
+  0x1f, 0x1f, 0x1f, 0xff, 0xff, 0x0f, 0xff, 0xff,	
+};
 
 void return_envelope_name(int value,char *string)
 {
@@ -419,8 +423,8 @@ COMMENT !
 
 //	printf ("ultimo_valor_tono: %d\n",ultimo_valor_tono);
 
-	tone.v=!(ay_3_8912_registros[chip][7] & mascara & 7);
-	noise.v=!(ay_3_8912_registros[chip][7] & mascara & (8+16+32));
+	tone.v=!(ay_retorna_mixer_register(chip) & mascara & 7);
+	noise.v=!(ay_retorna_mixer_register(chip) & mascara & (8+16+32));
 
 	if (tone.v==1 && noise.v==0)  {
 		valor=ultimo_valor_tono;
@@ -518,6 +522,159 @@ char da_output_ay(void)
 
 	return valor_enviar_ay;
 
+}
+
+int ay3_stereo_mode=0;
+
+int ay3_custom_stereo_A=0;
+int ay3_custom_stereo_B=1;
+int ay3_custom_stereo_C=2;
+/*
+          0=Mono
+          1=ACB Stereo (Canal A=Izq,Canal C=Centro,Canal B=Der)
+          2=ABC Stereo (Canal A=Izq,Canal B=Centro,Canal C=Der)
+		  3=BAC Stereo (Canal A=Centro,Canal B=Izquierdo,Canal C=Der)
+		  4=Custom. Depende de variables 
+		  	ay3_custom_stereo_A 
+			ay3_custom_stereo_B
+			ay3_custom_stereo_C
+			En cada una de esas 3, si vale 0=Left. Si 1=Center, Si 2=Right		  
+*/
+
+void da_output_ay_3_canales(char *canal_A,char *canal_B, char *canal_C)
+{
+    //char valor_enviar_ay=0;
+    int valor_enviar_ay_canal_A=0;
+	int valor_enviar_ay_canal_B=0;
+	int valor_enviar_ay_canal_C=0;
+	if (ay_chip_present.v==1) {
+
+		//Hacerlo para cada chip
+		int chips=ay_retorna_numero_chips();
+
+		int i;
+
+		for (i=0;i<chips;i++) {
+
+			valor_enviar_ay_canal_A +=da_output_canal(1+8,ultimo_valor_tono_A[i],ay_3_8912_registros[i][8],i);
+			valor_enviar_ay_canal_B +=da_output_canal(2+16,ultimo_valor_tono_B[i],ay_3_8912_registros[i][9],i);
+			valor_enviar_ay_canal_C +=da_output_canal(4+32,ultimo_valor_tono_C[i],ay_3_8912_registros[i][10],i);
+
+
+		}
+
+		//Dividir valor restante entre numero de chips
+		valor_enviar_ay_canal_A /=chips;
+		valor_enviar_ay_canal_B /=chips;
+		valor_enviar_ay_canal_C /=chips;
+	}
+
+
+	/*
+	if (valor_enviar_ay==0x10) {
+		printf ("A %d B %d C %d\n",da_output_canal(1+8,ultimo_valor_tono_A,ay_3_8912_registros[8]),da_output_canal(2+16,ultimo_valor_tono_B,ay_3_8912_registros[9]),da_output_canal(4+32,ultimo_valor_tono_C,ay_3_8912_registros[10]) );
+	}
+	*/
+
+	*canal_A=valor_enviar_ay_canal_A;
+	*canal_B=valor_enviar_ay_canal_B;
+	*canal_C=valor_enviar_ay_canal_C;
+}
+
+void da_output_ay_izquierdo_derecho(char *iz, char *de)
+{
+	char canal_A,canal_B,canal_C;
+
+	da_output_ay_3_canales(&canal_A,&canal_B,&canal_C);
+
+	int altavoz_izquierdo=0, altavoz_derecho=0;
+
+	//Aplicar modo stereo AY
+//int ay3_stereo_mode=0;
+/*
+          0=Mono
+          1=ACB Stereo (Canal A=Izq,Canal C=Centro,Canal B=Der)
+          2=ABC Stereo (Canal A=Izq,Canal B=Centro,Canal C=Der)
+		  3=BAC Stereo (Canal A=Centro,Canal B=Izquierdo,Canal C=Der)
+		  4=Custom. Depende de variables 
+		  	ay3_custom_stereo_A 
+			ay3_custom_stereo_B
+			ay3_custom_stereo_C
+			En cada una de esas 3, si vale 0=Left. Si 1=Center, Si 2=Right
+*/
+	switch (ay3_stereo_mode) {
+
+		case 1:
+			altavoz_izquierdo=canal_A+canal_C;
+			altavoz_derecho=canal_B+canal_C;
+		break;
+
+		case 2:
+			altavoz_izquierdo=canal_A+canal_B;
+			altavoz_derecho=canal_C+canal_B;
+		break;
+
+		case 3:
+			altavoz_izquierdo=canal_B+canal_A;
+			altavoz_derecho=canal_C+canal_A;
+		break;
+
+		case 4:
+			//Left
+			if (ay3_custom_stereo_A==0) altavoz_izquierdo +=canal_A;
+			if (ay3_custom_stereo_B==0) altavoz_izquierdo +=canal_B;
+			if (ay3_custom_stereo_C==0) altavoz_izquierdo +=canal_C;
+
+			//Center
+			if (ay3_custom_stereo_A==1) {
+				altavoz_izquierdo +=canal_A;
+				altavoz_derecho +=canal_A;
+			}
+			if (ay3_custom_stereo_B==1) {
+				altavoz_izquierdo +=canal_B;
+				altavoz_derecho +=canal_B;
+			}
+			if (ay3_custom_stereo_C==1) {
+				altavoz_izquierdo +=canal_C;
+				altavoz_derecho +=canal_C;
+			}
+
+			//Right
+			if (ay3_custom_stereo_A==2) altavoz_derecho +=canal_A;
+			if (ay3_custom_stereo_B==2) altavoz_derecho +=canal_B;
+			if (ay3_custom_stereo_C==2) altavoz_derecho +=canal_C;
+						
+		break;
+
+		default:
+			//Mono
+			altavoz_izquierdo=canal_A+canal_B+canal_C;
+			altavoz_derecho=altavoz_izquierdo;
+		break;
+
+	}	
+
+	*iz=altavoz_izquierdo;
+	*de=altavoz_derecho;
+
+}
+
+char da_output_ay_izquierdo(void)
+{
+	char iz;
+	char de;
+	da_output_ay_izquierdo_derecho(&iz,&de);
+
+	return iz;
+}
+
+char da_output_ay_derecho(void)
+{
+	char iz;
+	char de;
+	da_output_ay_izquierdo_derecho(&iz,&de);
+
+	return de;
 }
 
 char devuelve_volumen_ciclo_envolvente()
@@ -742,7 +899,7 @@ void ay_chip_siguiente_ciclo(void)
 
 }
 
-int temp_gunstick_electron=1;
+//int temp_gunstick_electron=1;
 //leer puerto
 z80_byte in_port_ay(z80_byte puerto_h)
 {
@@ -778,8 +935,12 @@ z80_byte in_port_ay(z80_byte puerto_h)
         	        }
 
 		}
+		z80_byte valor_retorno=ay_3_8912_registros[ay_chip_selected][r];
+		//Aplicar mascara de bits. Bits no usados en registros AY se ponen a 0
+		//printf ("Retornando valor registro chip AY %02XH\n",r);
+		valor_retorno &=ay_mascara_registros[r];
 
-		return ay_3_8912_registros[ay_chip_selected][r];
+		return valor_retorno;
         }
 
 	return 255;
@@ -846,6 +1007,206 @@ void establece_frecuencia_tono(z80_byte indice, int *freq_tono)
 }
 
 
+
+
+// Emulación y gestión de los dos registros de conexión con el chip AY mediante protocolo serie
+// Gracias a Miguel Angel Rodriguez Jodar por este código
+
+// Nota: toda variable usada en esta emulación tiene prefijo aymidi_rs232_
+// para distinguirla de la parte que envia a midi, o del exportador a archivos .mid
+
+
+/*
+
+Explicacion del mismo Miguel sobre esto:
+
+MIDI es una transmisión serie a 32.768 kbps. Entre bit y bit pasan 107 T 
+estados (de un reloj de 3.5 MHz) o bien 108 T estados si se usa como base un
+reloj de 3.54 MHz (128K). Las tolerancias pueden ser de entre 100 y 120 T para
+dar por buena una señal MIDI. Aunque aquí yo use siempre 108 como valor nominal
+de tiempo, ten en cuenta que puede variar entre esos dos valores dados (ver código).
+
+El formato de un byte transmitido por MIDI es:
+111111110XXXXXXXX1111111
+         ^      ^
+         LSb    MSb
+
+(cada bit dura 108 T estados idealmente)
+
+La señal MIDI comienza siempre con un estado 1 (inactivo o idle) que puede
+estar indefinidamente. Cuando se quiere comenzar la transmisión se baja a 0
+(activo) durante 108 T y a partir de ahí, se sube o se baja 8 veces para
+transmitir el byte. Después de transmitir el último bit, se queda a 1, y así
+hasta que se quiere transmitir otro byte.
+
+Supondré que en tu emu tienes algún tipo de variable que cuenta estados de
+reloj de un reloj de 3.5 MHz. Si estás en modo turbo (x2, x4, x8) tendrás
+que dividir los tiempos que midas entre el factor turbo (ver código más abajo).
+Pongamos que esa variable que cuenta T-estados se llama "t" y cuenta T-estados
+a la velocidad que tenga la CPU en ese momento.
+
+Si tienes alguna otra variable que cuente tiempo, y que sea independiente
+de la velocidad de la CPU (por ejemplo, un contador de píxeles de la ULA
+o algo similar), pues mejor aún.
+
+Si usas como medida de tiempo los T-estados de la CPU, supondré tambiÈn
+que tienes una variable "turbo" que vale 1, 2, 4 u 8, y
+que indica el factor multiplicador de la frecuencia base de la CPU.
+
+Supondré también que en otra variable está el estado de MIDI OUT (0 o 1)
+Llamaré a esa variable "o"
+
+Por último, supondré que tienes una función que es llamada cada vez que
+se hace una escritura al registro 0Eh del AY. Como bien sabes, el bit 2
+que se escribe a ese registro es nuestro valor de "o".
+
+Entonces, el algoritmo queda más o menos así:
+
+
+[dentro del cuerpo de la funciÛn que es llamada cuando se escribe en el
+registro 0Eh del AY-3-8912, incluir este cÛdigo]
+
+*/
+
+// estados de mi FSM
+enum AYMIDI_RS232_ESTADOS {ESPERA_START, LEE_BIT, ESPERA_STOP};
+
+// esta variable es para medir diferencias de tiempo entre dos
+// escrituras al AY. Guarda el T-estado de la anterior escritura
+static unsigned aymidi_rs232_tbefore = 0;
+
+// esta variable es el estado de la pequeÒa FSM que vamos a usar
+enum AYMIDI_RS232_ESTADOS aymidi_rs232_midi_state = ESPERA_START;
+
+// diferencia de tiempo entre dos escrituras al puerto MIDI
+int aymidi_rs232_diftime;
+
+// aqui se ir· ensamblando el byte emitido por MIDI
+static unsigned char aymidi_rs232_dato_midi;
+
+// contador de aymidi_rs232_bits
+static int aymidi_rs232_bits;
+
+//Si esta habilitado el envio de valores de registros midi 
+z80_bit aymidi_rs232_enabled={1};
+
+void procesar_aymidi_rs232_dato_midi(z80_byte value)
+{
+	//Si lo tenemos habilitado
+	if (aymidi_rs232_enabled.v==0) return;
+
+	debug_printf (VERBOSE_DEBUG,"Sending MIDI data: %02XH",value);
+	audio_midi_output_raw(value);	
+}
+
+
+void aymidi_rs232_miguel(int output_bit)
+{
+
+// Uso variable de t estados parcial para esto. Nota: esta variable no se incrementa en el core_reduced
+aymidi_rs232_diftime = (debug_t_estados_parcial+ - aymidi_rs232_tbefore)/cpu_turbo_speed;
+aymidi_rs232_tbefore = debug_t_estados_parcial;
+
+switch (aymidi_rs232_midi_state)
+{
+  case ESPERA_START:
+    if (output_bit == 0) // seÒal de START v·lida!
+    {
+	  debug_printf (VERBOSE_PARANOID,"aymidi_rs232: Valid START signal");
+      aymidi_rs232_midi_state = LEE_BIT;
+      aymidi_rs232_dato_midi = 0;
+      aymidi_rs232_bits = 0;
+      //break;
+    }  // en otro caso, seguimos esperando una seÒal v·lida...
+    break;
+
+  case LEE_BIT:
+    if (100<=aymidi_rs232_diftime && aymidi_rs232_diftime<=120)  // si llegÛ a tiempo...
+    {
+      aymidi_rs232_dato_midi >>= 1;  // desplazamos a la derecha
+      aymidi_rs232_dato_midi |= (output_bit << 7); // y plantamos el bit leido de MIDI en el bit 7
+      aymidi_rs232_bits++;                // asÌ vamos leyendo desde el LSb hasta el MSb
+      if (aymidi_rs232_bits == 8)
+        aymidi_rs232_midi_state = ESPERA_STOP;
+    }
+    else  // ha llegado una escritura, pero fuera de tiempo
+    {
+
+	  debug_printf (VERBOSE_PARANOID,"aymidi_rs232: Write arrived late");
+
+      if (output_bit == 1)  {// si es estado inactivo, volvemos al principio
+        aymidi_rs232_midi_state = ESPERA_START;
+		debug_printf (VERBOSE_PARANOID,"aymidi_rs232: Start receiving from the beginning");
+	  }
+      else
+      {  // si no, lo consideramos una nueva seÒal de START. Empezamos otra vez a leer aymidi_rs232_bits
+        aymidi_rs232_dato_midi = 0;
+        aymidi_rs232_bits = 0;
+		debug_printf (VERBOSE_PARANOID,"aymidi_rs232: Consider is as a START signal");
+      }
+    }
+
+    break;
+
+
+  case ESPERA_STOP:
+    if (100<=aymidi_rs232_diftime && aymidi_rs232_diftime<=120)  // si llegÛ a tiempo...
+    {
+      if (output_bit == 1) // seÒal de STOP v·lida!
+      {
+        procesar_aymidi_rs232_dato_midi(aymidi_rs232_dato_midi); // hacemos lo que sea con el dato recibido
+        aymidi_rs232_midi_state = ESPERA_START;
+		debug_printf (VERBOSE_PARANOID,"aymidi_rs232: Valid STOP signal");
+      }
+      else {
+        aymidi_rs232_midi_state = ESPERA_START; // seÒal de STOP no v·lida. Se descarta el dato
+		debug_printf (VERBOSE_PARANOID,"aymidi_rs232: Invalid STOP signal. Discard data");
+	  }
+    }
+    else  // no llegÛ a tiempo
+    {
+
+		printf("aymidi_rs232: STOP arrived late\n");
+
+      if (output_bit == 1) {
+        aymidi_rs232_midi_state = ESPERA_START;
+	  }
+      else
+      {  // lo consideramos una nueva seÒal de START
+        aymidi_rs232_midi_state = LEE_BIT;
+        aymidi_rs232_dato_midi = 0;
+        aymidi_rs232_bits = 0;
+      }
+    }
+
+    break;
+
+
+  default:
+    aymidi_rs232_midi_state = ESPERA_START;
+    break;
+}
+
+}
+
+// Fin emulación y gestión de los dos registros de conexión con el chip AY mediante protocolo serie
+
+
+
+
+void nuevo_aymidi_rs232_handle(z80_byte value)
+{
+	//Leo bit 2 y envio
+	int mibit;
+	if (value & 4) mibit=1;
+	else mibit=0;
+
+	debug_printf (VERBOSE_PARANOID,"aymidi_rs232: Receiving AY-RS232 bit: %d",mibit);
+
+	aymidi_rs232_miguel(mibit);
+}
+
+
 //Enviar valor a puerto
 void out_port_ay(z80_int puerto,z80_byte value)
 {
@@ -855,6 +1216,15 @@ void out_port_ay(z80_int puerto,z80_byte value)
 
 
 	//printf ("Out port ay chip. Puerto: %d Valor: %d\n",puerto,value);
+
+	if (puerto==49149 && (ay_3_8912_registro_sel[ay_chip_selected]==14 || ay_3_8912_registro_sel[ay_chip_selected]==15) ) {
+		//printf ("Out midi valor: %d\n",value);
+		//old_ay3_mid_handle(value);
+		nuevo_aymidi_rs232_handle(value);
+	}
+	//if (puerto==65533 && value>=14) printf("Out seleccion registro valor: %d\n",value);
+
+
 	if (puerto==65533) {
 		//Ver si seleccion de chip turbosound o 3 canales AY
 
@@ -1059,4 +1429,85 @@ void activa_ay_chip_si_conviene(void)
 			ay_chip_present.v=1;
 		}
 	}
+}
+
+
+//Retorna la frecuencia de un registro concreto del chip AY de sonido
+int ay_retorna_frecuencia(int registro,int chip)
+{
+        int freq_temp;
+	int freq_tono;
+        freq_temp=ay_3_8912_registros[chip][registro*2]+256*(ay_3_8912_registros[chip][registro*2+1] & 0x0F);
+        //printf ("Valor freq_temp : %d\n",freq_temp);
+        freq_temp=freq_temp*16;
+
+
+        //controlamos divisiones por cero
+        if (!freq_temp) freq_temp++;
+
+        freq_tono=FRECUENCIA_AY/freq_temp;
+
+	return freq_tono;
+}
+
+/*
+
+Filtros de salida ay chip
+por chip(0...2) y canal (0..2)
+
+tono si/no
+ruido si/no
+desactivado del todo si/no
+
+
+R7 � Control del mezclador y de E/S
+D7 No utilizado
+D6 1=puerta de entrada, 0=puerta de salida
+D5 Ruido en el canal C
+D4 Ruido en el canal B
+D3 Ruido en el canal A
+D2 Tono en el canal C
+D1 Tono en el canal B
+DO Tono en el canal A
+
+a 1 para desactivar eso
+Canal A todo activado: mascara xxxx0xx0 -> mascara or
+Canal A sin ruido: xxxx1xx0
+Canal A sin tono: xxxx0xx1
+Canal A sin nada: xxxx1xx1
+
+
+Canal B todo activado: mascara xxx0xx0x -> mascara or
+Canal B sin ruido: xxx1xx0x
+Canal B sin tono: xxx0xx1x
+Canal B sin nada: xxx1xx1x
+
+Canal C todo activado: mascara xx0xx0xx -> mascara or
+Canal C sin ruido: xx1xx0xx
+Canal C sin tono: xx0xx1xx
+Canal C sin nada: xx1xx1xx
+
+ */
+
+//A 0 todos para normal
+z80_byte ay_filtros[MAX_AY_CHIPS];
+
+void ay_init_filters(void)
+{
+	int i;
+	for (i=0;i<MAX_AY_CHIPS;i++) {
+		ay_filtros[i]=0;
+	}
+}
+
+//Retorna el registro del mezclador, pero aplicando filtro de canal activado/no, ruido si/no, tono si/no
+//Usado en mid export, direct midi
+z80_byte ay_retorna_mixer_register(int chip)
+{
+	z80_byte valor=ay_3_8912_registros[chip][7];
+
+	//Aplicar filtro
+	valor |=ay_filtros[chip];
+
+	return valor;
 }

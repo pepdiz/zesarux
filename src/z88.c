@@ -33,7 +33,6 @@
 #include "operaciones.h"
 #include "utils.h"
 #include "audio.h"
-#include "utils.h"
 #include "timer.h"
 
 
@@ -898,11 +897,11 @@ z80_byte z88_return_keyboard_port_value(z80_byte puerto_h)
 {
 
                 //si estamos en el menu, no devolver tecla
-                if (menu_abierto==1) return 255;
+                if (zxvision_key_not_sent_emulated_mach() ) return 255;
 
 
                 //Si esta spool file activo, generar siguiente tecla
-                if (input_file_keyboard_inserted.v==1) {
+                if (input_file_keyboard_is_playing() ) {
                         input_file_keyboard_get_key();
                 }
 
@@ -973,6 +972,7 @@ void z88_generar_maskable_si_top_speed(void)
 z80_byte lee_puerto_z88_no_time(z80_byte puerto_h,z80_byte puerto_l)
 {
 
+	debug_fired_in=1;
 	z80_byte acumulado;
 
 
@@ -1093,6 +1093,7 @@ z80_byte lee_puerto_z88(z80_byte puerto_h,z80_byte puerto_l)
 
 void out_port_z88_no_time(z80_int puerto,z80_byte value)
 {
+	debug_fired_out=1;
         z80_byte puerto_l=value_16_to_8l(puerto);
         z80_byte puerto_h=value_16_to_8h(puerto);
 
@@ -1386,9 +1387,9 @@ void z88_open_flap(void)
 	debug_printf (VERBOSE_DEBUG,"Open Z88 flap");
 
 	//este texto no se suele ver dado que casi siempre entra aqui con menu abierto y en esos casos no se muesta mensaje
-	//screen_print_splash_text(10,ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,"Opening Flap");
+	//screen_print_splash_text_center(ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,"Opening Flap");
 
-	menu_putstring_footer(WINDOW_FOOTER_ELEMENT_X_FLAP,1," FLAP ",WINDOW_FOOTER_PAPER,WINDOW_FOOTER_INK);	
+	generic_footertext_print_operating("FLAP");
 
 	/*
         if (((blink_int & BM_INTFLAP) == BM_INTFLAP) & ((blink_int & BM_INTGINT) == BM_INTGINT)) {
@@ -1413,7 +1414,7 @@ void z88_close_flap(void)
 	debug_printf (VERBOSE_DEBUG,"Close Z88 flap");
 
 	//este texto no se suele ver dado que casi siempre entra aqui con menu abierto y en esos casos no se muesta mensaje
-	//screen_print_splash_text(10,ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,"Closing Flap");
+	//screen_print_splash_text_center(ESTILO_GUI_TINTA_NORMAL,ESTILO_GUI_PAPEL_NORMAL,"Closing Flap");
 
 
 	z88_pausa_open_close_flap();
@@ -1421,7 +1422,6 @@ void z88_close_flap(void)
 	//Notificar cierre tapa
 	blink_sta &=(255-128-32);
 
-	menu_putstring_footer(WINDOW_FOOTER_ELEMENT_X_FLAP,1,"      ",WINDOW_FOOTER_INK,WINDOW_FOOTER_PAPER);	
 	menu_footer_z88();
 
 }
@@ -3034,7 +3034,12 @@ char z88_get_beeper_sound(void)
 //Necesario para que juegos y programas siguientes no se cuelguen: Lemmings (justo al iniciar), Dstar (no lee ninguna tecla), Pipedream (al escribir muy rapido y hacer ENTER)
 void notificar_tecla_interrupcion_si_z88(void)
 {
-	if (MACHINE_IS_Z88 && menu_abierto==0) {
+	if (MACHINE_IS_Z88) {
+		if (zxvision_key_not_sent_emulated_mach() ) {
+
+		}
+
+		else {
 
 		//TODO
 		//Solo se deberian enviar interrupciones cuando se permite (blink_int & BM_INTKEY) == BM_INTKEY
@@ -3053,6 +3058,7 @@ void notificar_tecla_interrupcion_si_z88(void)
 		//No compruebo si se permite interrupcion y la envio siempre que se pulsa tecla
 		//debug_printf (VERBOSE_DEBUG,"Generate Maskable Interrupt to notify Z88 key press");
 		interrupcion_maskable_generada.v=1;
+		}
 	}
 }
 

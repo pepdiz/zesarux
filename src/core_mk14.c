@@ -55,7 +55,6 @@
 void cpu_core_loop_mk14(void)
 {
 
-  debug_get_t_stados_parcial_post();
   debug_get_t_stados_parcial_pre();
 
 
@@ -135,6 +134,8 @@ else printf ("   ");
 				if (realtape_loading_sound.v) {
 				audio_valor_enviar_sonido /=2;
                                 audio_valor_enviar_sonido += realtape_last_value/2;
+                                //Sonido alterado cuando top speed
+                                if (timer_condicion_top_speed() ) audio_valor_enviar_sonido=audio_change_top_speed_sound(audio_valor_enviar_sonido);
 				}
                         }
 
@@ -143,14 +144,7 @@ else printf ("   ");
                                 audio_valor_enviar_sonido=audio_adjust_volume(audio_valor_enviar_sonido);
                         }
 
-
-			//printf ("sonido: %d\n",audio_valor_enviar_sonido);
-
-                        audio_buffer[audio_buffer_indice]=audio_valor_enviar_sonido;
-
-
-                        if (audio_buffer_indice<AUDIO_BUFFER_SIZE-1) audio_buffer_indice++;
-                        //else printf ("Overflow audio buffer: %d \n",audio_buffer_indice);
+                        audio_send_mono_sample(audio_valor_enviar_sonido);
 
 
                         ay_chip_siguiente_ciclo();
@@ -172,9 +166,7 @@ else printf ("   ");
                                 int linea_estados=t_estados/screen_testados_linea;
 
                                 while (linea_estados<312) {
-
-                                        audio_buffer[audio_buffer_indice]=audio_valor_enviar_sonido;
-                                        if (audio_buffer_indice<AUDIO_BUFFER_SIZE-1) audio_buffer_indice++;
+                                        audio_send_mono_sample(audio_valor_enviar_sonido);
                                         linea_estados++;
                                 }
 
@@ -258,7 +250,7 @@ else printf ("   ");
 		//Interrupcion de cpu. gestion im0/1/2.
 		if (interrupcion_maskable_generada.v || interrupcion_non_maskable_generada.v) {
 
-
+			debug_fired_interrupt=1;
 
                         //ver si esta en HALT
                         if (z80_ejecutando_halt.v) {
@@ -297,5 +289,6 @@ else printf ("   ");
 
   }
 
+  debug_get_t_stados_parcial_post();
 
 }

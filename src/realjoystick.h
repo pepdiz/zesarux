@@ -39,9 +39,9 @@
         //Luego en el init detectamos esto y devuelve que no hay soporte joystick
 
 
-        #define JS_EVENT_BUTTON         0x01    /* button pressed/released */
-        #define JS_EVENT_AXIS           0x02    /* joystick moved */
-        #define JS_EVENT_INIT           0x80    /* initial state of device */
+        //#define JS_EVENT_BUTTON         0x01    /* button pressed/released */
+        //#define JS_EVENT_AXIS           0x02    /* joystick moved */
+        //#define JS_EVENT_INIT           0x80    /* initial state of device */
 
 
 typedef unsigned int __u32;
@@ -59,12 +59,45 @@ typedef unsigned char __u8;
 #endif
 
 
+//Los hacemos diferentes de JS_EVENT_* de Linux para asegurarnos que el codigo es portable en otras plataformas
+        //#define JS_EVENT_BUTTON         0x01    /* button pressed/released */
+        //#define JS_EVENT_AXIS           0x02    /* joystick moved */
+        //#define JS_EVENT_INIT           0x80    /* initial state of device */
+
+#define REALJOYSTICK_INPUT_EVENT_BUTTON         0x04    /* button pressed/released */
+#define REALJOYSTICK_INPUT_EVENT_AXIS           0x08    /* joystick moved */
+#define REALJOYSTICK_INPUT_EVENT_INIT           0x40    /* initial state of device */
+
+
+extern int (*realjoystick_init)(void);
+extern void (*realjoystick_main)(void);
+//extern int (*realjoystick_hit)(void);
+
+extern int realjoystick_hit;
+
+extern int realjoystick_null_init(void);
+extern void realjoystick_null_main(void);
+extern int realjoystick_null_hit(void);
+
+
+extern void realjoystick_linux_main(void);
+extern int realjoystick_linux_init(void);
+extern int realjoystick_linux_hit(void);
+
+extern z80_bit no_native_linux_realjoystick;
+extern int realjoystick_autocalibrate_value;
+
 
 extern int realjoystick_read_event(int *button,int *type,int *value);
-extern int realjoystick_init(void);
-extern void realjoystick_main(void);
-extern void realjoystick_set_default_functions(void);
-extern int realjoystick_hit();
+
+//extern void realjoystick_set_default_functions(void);
+
+extern void realjoystick_new_set_default_functions(void);
+
+extern void realjoystick_init_events_keys_tables(void);
+extern void realjoystick_initialize_joystick(void);
+
+extern char string_dev_joystick[];
 
 extern z80_bit realjoystick_present;
 
@@ -77,18 +110,21 @@ extern z80_bit realjoystick_disabled;
 #define REALJOYSTICK_EVENT_FIRE 4
 #define REALJOYSTICK_EVENT_ESC_MENU 5
 #define REALJOYSTICK_EVENT_ENTER 6
-#define REALJOYSTICK_EVENT_QUICKLOAD 7
-#define REALJOYSTICK_EVENT_QUICKSAVE 8
-#define REALJOYSTICK_EVENT_OSDKEYBOARD 9
-#define REALJOYSTICK_EVENT_NUMBERSELECT 10
-#define REALJOYSTICK_EVENT_NUMBERACTION 11
-#define REALJOYSTICK_EVENT_AUX1 12
-#define REALJOYSTICK_EVENT_AUX2 13
-#define REALJOYSTICK_EVENT_AUX3 14
-#define REALJOYSTICK_EVENT_AUX4 15
+#define REALJOYSTICK_EVENT_MENU_TAB 7
+#define REALJOYSTICK_EVENT_QUICKLOAD 8
+#define REALJOYSTICK_EVENT_QUICKSAVE 9
+#define REALJOYSTICK_EVENT_OSDKEYBOARD 10
+#define REALJOYSTICK_EVENT_OSD_TEXT_KEYBOARD 11
+#define REALJOYSTICK_EVENT_NUMBERSELECT 12
+#define REALJOYSTICK_EVENT_NUMBERACTION 13
+#define REALJOYSTICK_EVENT_JOYSELECT 14
+#define REALJOYSTICK_EVENT_AUX1 15
+#define REALJOYSTICK_EVENT_AUX2 16
+#define REALJOYSTICK_EVENT_AUX3 17
+#define REALJOYSTICK_EVENT_AUX4 18
 
 //este valor es el numero de ultimo REALJOYSTICK_EVENT_XX +1
-#define MAX_EVENTS_JOYSTICK 16
+#define MAX_EVENTS_JOYSTICK 19
 
 extern char *realjoystick_event_names[];
 
@@ -144,11 +180,29 @@ extern int realjoystick_set_button_key(char *text_button,char *text_key);
 
 extern int realjoystick_set_event_key(char *text_event,char *text_key);
 
-extern int realjoystick_last_button,realjoystick_last_type,realjoystick_last_value,realjoystick_last_index;
+extern void realjoystick_common_set_event(int button,int type,int value);
+
+
 
 extern int simulador_joystick;
 extern int simulador_joystick_forzado;
 
+//extern int realjoystick_find_event(int indice_inicial,int button,int type,int value);
+extern int realjoystick_buscar_evento_en_tabla(int button, int button_type);
+
+extern void realjoystick_reopen_driver(void);
+extern int realjoystick_is_linux_native(void);
+extern void realjoystick_start_driver(void);
+
+extern int realjoystick_total_buttons;
+extern int realjoystick_total_axes;
+#define REALJOYSTICK_MAX_NAME 32
+
+extern char realjoystick_joy_name[];
+
+#define REALJOYSTICK_MAX_DRIVER_NAME 40
+
+extern char realjoystick_driver_name[];
 
 
 #endif

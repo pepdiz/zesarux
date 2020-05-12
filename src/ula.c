@@ -32,6 +32,8 @@
 #include "multiface.h"
 #include "betadisk.h"
 #include "settings.h"
+#include "divmmc.h"
+#include "hilow.h"
 
 
 //#define ZESARUX_ZXI_PORT_REGISTER 0xCF3B
@@ -68,6 +70,11 @@ z80_bit ula_im2_slow={0};
 
 z80_bit pentagon_timing={0};
 
+//Puerto de Pentagon y ZX Evo
+//Bit 0: activar modo 16C
+//Bit XXX: Control de acceso a celdas nvram
+z80_byte puerto_eff7=0;
+
 
 //Si se pulsan mas de dos teclas en diferentes columnas, en spectrum, se leen mas teclas.
 //El tipico caps+b+v representa caps+b+v+space
@@ -82,6 +89,10 @@ z80_bit ula_disabled_rom_paging={0};
 z80_bit recreated_zx_keyboard_support={0};
 
 z80_bit recreated_zx_keyboard_pressed_caps={0};
+
+
+int nmi_pending_pre_opcode=0;
+int nmi_pending_post_opcode=0;
 
 void ula_pentagon_timing_common(void)
 {
@@ -291,12 +302,13 @@ Index is reset to 0 every reset
   return zesarux_zxi_registers_array[zesarux_zxi_last_register];
 }
 
-
-
-void generate_nmi(void)
+void nmi_handle_pending_prepost_fetch(void)
 {
-	interrupcion_non_maskable_generada.v=1;
-	if (multiface_enabled.v) {
+
+    nmi_pending_pre_opcode=0;
+    nmi_pending_post_opcode=0;
+
+    if (multiface_enabled.v) {
 		multiface_map_memory();
         multiface_lockout=0;
 	}
@@ -304,8 +316,81 @@ void generate_nmi(void)
     if (betadisk_enabled.v) {
         betadisk_active.v=1;
     }
+
+    if (hilow_enabled.v) {
+        hilow_mapped_rom.v=1;
+        hilow_mapped_ram.v=1;
+    }
+
+    
 }
 
+void generate_nmi(void)
+{
+	interrupcion_non_maskable_generada.v=1;
+    //nmi_pending_post_opcode=1;
+
+}
+
+void generate_nmi_multiface_tbblue(void)
+{
+    //hacer que no salte mapeo de divmmc
+    //if (divmmc_diviface_enabled.v) divmmc_diviface_disable();
+
+	interrupcion_non_maskable_generada.v=1;
+
+   
+}
+
+void old_generate_nmi_prepare_fetch(void)
+{
+    //Vamos a suponer que lo normal es que salte en 66h, o sea, con pre_opcode
+
+    nmi_pending_pre_opcode=1;
+    
+    if (MACHINE_IS_TBBLUE && multiface_enabled.v && multiface_type==MULTIFACE_TYPE_THREE) {
+        //Pero en tbblue, salta con post. Entonces no se esta comportando como un mf3 realmente
+        nmi_pending_post_opcode=1;
+        nmi_pending_pre_opcode=0;
+    }
+
+}
+
+void generate_nmi_prepare_fetch(void)
+{
+    //Vamos a suponer que lo normal es que salte en 67h, o sea, con post_opcode
+
+    nmi_pending_post_opcode=1;
+    
+    if (!MACHINE_IS_TBBLUE && multiface_enabled.v && multiface_type==MULTIFACE_TYPE_THREE) {
+        //Pero en mf3 (no en tbblue), salta con pre
+        nmi_pending_pre_opcode=1;
+        nmi_pending_post_opcode=0;
+    }
+
+    //prueba betadisk. todo indica por la rom que hace pre, aunque luego igualmente al lanzar la nmi, peta
+    if (betadisk_enabled.v) {
+        nmi_pending_pre_opcode=1;
+        nmi_pending_post_opcode=0;        
+    }
+
+}
+
+void old_old_generate_nmi_prepare_fetch(void)
+{
+    nmi_pending_post_opcode=1;
+
+    if (multiface_enabled.v && multiface_type==MULTIFACE_TYPE_THREE) {
+        nmi_pending_post_opcode=0;
+        nmi_pending_pre_opcode=1;
+    }
+
+    //Betadisk tambien hace en pre??
+    if (betadisk_enabled.v) {
+        nmi_pending_post_opcode=0;
+        nmi_pending_pre_opcode=1;        
+    }
+}
 
 //Convertir tecla leida del recreated en tecla real y en si es un press (1) o un release(0)
 /*

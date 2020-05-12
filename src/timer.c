@@ -53,6 +53,7 @@
 #include "esxdos_handler.h"
 #include "betadisk.h"
 #include "pd765.h"
+#include "settings.h"
 
 #include "autoselectoptions.h"
 
@@ -61,6 +62,15 @@
 	//En Mac OS X el timer en pthreads no funciona bien... lo desactivamos
 	#undef USE_PTHREADS
 #endif
+
+
+#ifdef MINGW
+	//Parece que en Windows el timer en pthreads no funciona bien... lo desactivamos
+	//Esto parece que resuelve algunos de los "clicks" en el audio en Windows
+	#undef USE_PTHREADS
+#endif
+
+
 
 #ifdef USE_PTHREADS
 #include <pthread.h>
@@ -94,6 +104,9 @@ int conta_envio_audio=0;
 
 //Contador que se decrementa(si esta activo) cada 1/50 s, e indica cuando se debe liberar una tecla pulsada desde el menu de On Screen Keyboard
 int timer_on_screen_key=0;
+
+//Parecido pero para adventure keyboard
+int timer_on_screen_adv_key=0;
 
 
 //lo que dura un frame en microsegundos  (20 ms = 200000 milisec)
@@ -135,6 +148,7 @@ void timer_stats_current_time(struct timeval *tiempo)
 }
 
 
+//Diferencia de dos tiempos pero calculando el tiempo_despues segun tiempo actual
 long timer_stats_diference_time(struct timeval *tiempo_antes, struct timeval *tiempo_despues)
 {
 	timer_stats_current_time(tiempo_despues);
@@ -495,6 +509,22 @@ void timer_check_interrupt(void)
 			}
 
 
+			if (timer_on_screen_adv_key) {
+				timer_on_screen_adv_key--;
+
+				//Si llega a 25, es ese medio segundo sin pulsar tecla
+				if (timer_on_screen_adv_key==adventure_keyboard_key_length/2) {
+					reset_keyboard_ports();
+				}
+
+                                //Si llega a 0, volver a menu
+				if (timer_on_screen_adv_key==0) {
+					//Hay que volver a menu
+					menu_button_osd_adv_keyboard_return.v=1;
+                                        menu_abierto=1;
+				}
+			}
+
 			//joystick autofire
 			if (joystick_autofire_frequency!=0) {
 				joystick_autofire_counter++;
@@ -507,7 +537,7 @@ void timer_check_interrupt(void)
 			}
 
 			//Input file keyboard
-			if (input_file_keyboard_inserted.v==1) {
+			if (input_file_keyboard_is_playing() ) {
 				input_file_keyboard_delay_counter++;
 				if (input_file_keyboard_delay_counter>=input_file_keyboard_delay) {
 					input_file_keyboard_delay_counter=0;
@@ -530,6 +560,8 @@ void timer_check_interrupt(void)
 			//decrementar contador pausa cinta
 			if (tape_pause!=0) tape_pause--;
 
+			//contador de doble click de raton
+			menu_mouse_left_double_click_counter++;
 
 			if (menu_contador_teclas_repeticion) {
 				menu_contador_teclas_repeticion--;
@@ -614,42 +646,17 @@ void timer_check_interrupt(void)
                                 //resetear texto splash
                                 reset_splash_text();
 
-				//temporizador de second layer solo para un tiempo concreto
-				/*
-				if (menu_second_layer_counter) {
-					menu_second_layer_counter--;
-					if (menu_second_layer_counter==0) {
-						debug_printf (VERBOSE_INFO,"disable second layer");
-						//disable_second_layer();
-
-						if (menu_abierto==0) menu_overlay_activo=0;
-					}
-				}
-				*/
+			
 
 				//temporizador de carga de cinta para escribir texto loading en pantalla
-				if (tape_loading_counter) {
+				/*if (tape_loading_counter) {
 					tape_loading_counter--;
 					if (tape_loading_counter==0) {
 						delete_tape_text();
 					}
-				}
+				}*/
 
-				//temporizador de impresion para escribir texto printing en pantalla
-                                if (printing_counter) {
-                                        printing_counter--;
-                                        if (printing_counter==0) {
-                                                delete_print_text();
-                                        }
-                                }
-
-                                //temporizador de impresion para escribir texto flash zxuno en pantalla
-                                if (zxuno_flash_operating_counter) {
-                                        zxuno_flash_operating_counter--;
-                                        if (zxuno_flash_operating_counter==0) {
-                                                delete_zxuno_flash_text();
-                                        }
-                                }
+	                           
 
 			
 
@@ -660,32 +667,17 @@ void timer_check_interrupt(void)
                                                 delete_generic_footertext();
                                         }
                                 }
-
-				//temporizador de impresion para escribir texto flash superupgrade en pantalla
-				if (superupgrade_flash_operating_counter) {
-							        superupgrade_flash_operating_counter--;
-								if (superupgrade_flash_operating_counter==0) {
-									                delete_superupgrade_flash_text();
-								}
-				}
+			//Temporizador para decir si se ha detectado real joystick
+			//dado que si no hay joystick, por defecto está habilitado el bit de joystick presente, pero luego
+			//el realjoystick_null_main lo pondrá a 0, desactivandolo
+			//si llamamos a menu_tell_if_realjoystick_detected justo al arrancar ZEsarUX, no da tiempo a ejecutar
+			//realjoystick_null_main, por tanto el joystick aun seguira presente al inicio, y se dirá erroneamente que esta presente,
+			//cuando no lo esta
+			if (menu_tell_if_realjoystick_detected_counter>0) {
+				menu_tell_if_realjoystick_detected_counter--;
+				if (menu_tell_if_realjoystick_detected_counter==0) menu_tell_if_realjoystick_detected();
+			}
 				
-
-                                //temporizador de impresion para escribir texto ZXPAND en pantalla
-                                if (zxpand_operating_counter) {
-                                        zxpand_operating_counter--;
-                                        if (zxpand_operating_counter==0) {
-                                                delete_zxpand_text();
-                                        }
-                                }
-
-
-				//temporizador de impresion para escribir texto filter en pantalla
-				if (textspeech_operating_counter) {
-					textspeech_operating_counter--;
-					if (textspeech_operating_counter==0) {
-						textspeech_clear_operating();
-					}
-				}
 
 
 
@@ -729,6 +721,8 @@ void timer_check_interrupt(void)
 				dskplusthree_flush_contents_to_disk();
 
 				rzx_print_footer();
+
+				realtape_print_footer();
 
 
 				//escritura de contenido de flash de superupgrade a disco
@@ -778,6 +772,9 @@ int timer_get_uptime_seconds(void)
 
 	//printf ("seconds: %ld\n",z80_uptime_total_seconds);
 
+	//Si por algo el valor es negativo (porque no haya segundos iniciales por ejemplo), retornar 0
+	if (z80_uptime_total_seconds<0) z80_uptime_total_seconds=0;
+
 	return z80_uptime_total_seconds;
 
 }
@@ -823,7 +820,7 @@ long timer_get_elapsed_seconds_since_first_version(void)
 	//printf ("segundos desde creacion: %ld\n",z80_uptime_seconds);
 
 	return z80_total_seconds;
-
+ 
 }
 
 
@@ -841,3 +838,9 @@ int timer_get_worked_time(void)
 	return total_tiempo_invertido;
 
 }
+
+void timer_toggle_top_speed_timer(void)
+{
+	top_speed_timer.v ^=1;
+}
+

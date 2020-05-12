@@ -8,7 +8,8 @@ cat << _EOF
 Available versions for download here:
 * Source code
 * Binary compiled versions:
-* Linux 32/64 Bits
+* GNU/Linux 32/64 Bits
+* FreeBSD 64 Bits
 * Mac OS X
 * Windows
 * Raspberry pi (raspbian)
@@ -78,6 +79,10 @@ ZX-Uno
 ZX-Evolution TSConf
 
 ![alt text](https://github.com/chernandezba/zesarux/raw/master/screenshots/screenshot_tsconf.jpeg "ZX-Evolution TSConf")
+
+
+TBBlue/ZX Spectrum Next
+![alt text](https://github.com/chernandezba/zesarux/raw/master/screenshots/screenshot_tbblue.png "TBBlue/ZX Spectrum Next")
 
 
 You can find some ZEsarUX videos on my [Youtube channel](https://www.youtube.com/user/chernandezba)

@@ -30,10 +30,18 @@ extern void audiocoreaudio_send_frame(char *buffer);
 extern void audiocoreaudio_end(void);
 
 extern void audiocoreaudio_get_buffer_info (int *buffer_size,int *current_buffer_position);
+extern void coreaudio_mid_raw_send(z80_byte value);
+extern void coreaudio_midi_output_reset(void);
 
 #define MAX_AUDIOCOREAUDIO_FIFO_MULTIPLIER 10
 #define MIN_AUDIOCOREAUDIO_FIFO_MULTIPLIER 2
 
 extern int audiocoreaudio_fifo_buffer_size_multiplier;
+
+extern int coreaudio_note_on(unsigned char channel, unsigned char note,unsigned char velocity);
+extern int coreaudio_note_off(unsigned char channel, unsigned char note,unsigned char velocity);
+extern void coreaudio_midi_output_flush_output(void);
+extern int coreaudio_mid_initialize_all(void);
+extern void coreaudio_mid_finish_all(void);
 
 #endif
